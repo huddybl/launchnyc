@@ -74,6 +74,15 @@
   border-radius: 9999px;
   padding: 6px 12px;
 }
+.board-page .weeks-pill-link {
+  text-decoration: none;
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.board-page .weeks-pill-link:hover {
+  opacity: 0.9;
+}
 .board-page .btn-primary {
   background: var(--navy);
   color: white;

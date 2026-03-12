@@ -1,10 +1,21 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import GuestPreviewBanner from "@/components/GuestPreviewBanner";
 import "./board.css";
+
+function weeksToMoveIn(moveInDateStr) {
+  if (!moveInDateStr) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const moveIn = new Date(moveInDateStr);
+  moveIn.setHours(0, 0, 0, 0);
+  const diffMs = moveIn - today;
+  return Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000));
+}
 
 const STATUS_OPTIONS = ["Saved", "Touring", "Applying", "Signed"];
 const STATUS_TO_DB = { Saved: "saved", Touring: "touring", Applying: "applying", Signed: "signed" };
@@ -118,6 +129,24 @@ export default function BoardPage() {
   const [filterFee, setFilterFee] = useState("all");
   const [filterPriceMin, setFilterPriceMin] = useState("");
   const [filterPriceMax, setFilterPriceMax] = useState("");
+  const [moveInDate, setMoveInDate] = useState(null);
+
+  const fetchMoveInDate = useCallback(async () => {
+    if (!user?.id) {
+      setMoveInDate(null);
+      return;
+    }
+    const { data } = await supabase
+      .from("user_profiles")
+      .select("move_in_date")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    setMoveInDate(data?.move_in_date ?? null);
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchMoveInDate();
+  }, [fetchMoveInDate]);
 
   const fetchApartments = useCallback(async () => {
     // #region agent log
@@ -598,7 +627,18 @@ export default function BoardPage() {
           </div>
         </div>
         <div className="topbar-right">
-          <div className="weeks-pill">9 weeks to move-in</div>
+          {moveInDate != null ? (
+            (() => {
+              const weeks = weeksToMoveIn(moveInDate);
+              const label =
+                weeks < 0 ? "Move-in passed" : `${weeks} week${weeks !== 1 ? "s" : ""} to move-in`;
+              return <div className="weeks-pill">{label}</div>;
+            })()
+          ) : (
+            <Link href="/account" className="weeks-pill weeks-pill-link">
+              Set move-in date
+            </Link>
+          )}
           <button
             type="button"
             className="btn-outline"
