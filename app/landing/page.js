@@ -9,14 +9,14 @@ import {
   User,
 } from "lucide-react";
 
-const CONTAINER = "mx-auto max-w-[1200px] px-12";
+const SECTION_INNER = "mx-auto max-w-[1280px] px-8";
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-white font-sans text-[#001f3f] antialiased">
-      {/* 1. Top nav — full width, centered container */}
-      <header className="sticky top-0 z-50 w-full border-b border-[#e8ecf2] bg-white">
-        <nav className={`flex w-full items-center justify-between py-4 ${CONTAINER}`}>
+    <div className="min-h-screen w-full bg-white font-sans text-[#001f3f] antialiased">
+      {/* 1. Nav — full browser width, padding 32px only */}
+      <header className="sticky top-0 z-50 w-full border-b border-[#e8ecf2] bg-white px-8">
+        <nav className="flex items-center justify-between py-4">
           <Link href="/landing" className="flex items-center">
             <img
               src="/logo.png"
@@ -42,12 +42,13 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      {/* 2. Hero — full width, two equal columns, vertically centered */}
-      <section className="w-full py-16 sm:py-20 lg:py-24">
-        <div className={`grid w-full grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-16 ${CONTAINER}`}>
-          <div>
-            <h1 className="text-4xl font-bold tracking-tight text-[#001f3f] sm:text-5xl lg:text-[3rem] lg:leading-[1.15]">
-              Your NYC application. Ready in 20 minutes.
+      {/* 2. Hero — full-width outer (bg), inner max-w 1280px, grid 1fr 1fr gap 80px */}
+      <section className="w-full bg-white py-16 sm:py-20 lg:py-24">
+        <div className={SECTION_INNER}>
+          <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[1fr_1fr] lg:gap-20">
+          <div className="pl-0">
+            <h1 className="text-4xl font-extrabold leading-[1.1] tracking-tight text-[#001f3f] sm:text-5xl lg:text-[60px]">
+              Your NYC lease application. Ready in 20 minutes.
             </h1>
             <p className="mt-5 text-lg text-[#4b5563] leading-relaxed">
               Stop scrambling. LaunchNYC gets first-time renters organized, prepared, and moving fast — before the apartment is gone.
@@ -61,9 +62,9 @@ export default function LandingPage() {
               </Link>
             </div>
           </div>
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-end">
             {/* Browser window mockup */}
-            <div className="w-full max-w-lg overflow-hidden rounded-lg border border-[#e8ecf2] bg-white shadow-[0_12px_40px_rgba(0,31,63,0.15)]">
+            <div className="ml-auto w-full max-w-lg overflow-hidden rounded-lg border border-[#e8ecf2] bg-white shadow-[0_12px_40px_rgba(0,31,63,0.15)]">
               <div className="flex items-center gap-2 border-b border-[#2d2d2d] bg-[#2d2d2d] px-3 py-2.5">
                 <span className="h-3 w-3 rounded-full bg-[#ff5f57]" aria-hidden />
                 <span className="h-3 w-3 rounded-full bg-[#febc2e]" aria-hidden />
@@ -83,12 +84,13 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+          </div>
         </div>
       </section>
 
-      {/* 3. Three feature cards — full width */}
+      {/* 3. Feature cards — full-width outer (bg), inner max-w 1280px */}
       <section className="w-full border-t border-[#e8ecf2] bg-[#fafbfc] py-16 sm:py-20">
-        <div className={CONTAINER}>
+        <div className={SECTION_INNER}>
           <div className="grid gap-8 sm:grid-cols-3">
             <div className="rounded-xl border border-[#e8ecf2] bg-white p-6 shadow-sm">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#001f3f]/10 text-[#001f3f]">
@@ -127,11 +129,11 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 4. Everything you need — 2x2 grid, full width */}
+      {/* 4. Everything you need — full-width outer (bg), inner max-w 1280px */}
       <section className="w-full border-t border-[#e8ecf2] bg-white py-16 sm:py-20">
-        <div className={CONTAINER}>
+        <div className={SECTION_INNER}>
           <h2 className="text-center text-2xl font-bold tracking-tight text-[#001f3f] sm:text-3xl">
-            Everything you need. Nothing you don&apos;t.
+            Everything you need, in one place.
           </h2>
           <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:mt-16">
             <div className="flex gap-4">
@@ -182,9 +184,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 5. Bottom CTA strip — full width */}
+      {/* 5. Bottom CTA — full-width outer (bg), inner max-w 1280px */}
       <section className="w-full bg-[#001f3f] py-14 sm:py-16">
-        <div className={`flex flex-col items-center justify-center gap-6 sm:flex-row sm:gap-8 ${CONTAINER}`}>
+        <div className={`flex flex-col items-center justify-center gap-6 sm:flex-row sm:gap-8 ${SECTION_INNER}`}>
           <p className="text-center text-lg font-medium text-white sm:text-xl">
             Moving to NYC this summer? Get organized today.
           </p>
