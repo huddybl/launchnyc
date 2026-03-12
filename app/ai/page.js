@@ -244,7 +244,7 @@ export default function AIPage() {
       <div className="flex min-h-screen flex-col bg-[#f4f6f9]">
         <GuestPreviewBanner />
         <div className="flex flex-1">
-        <aside className="flex w-64 flex-shrink-0 flex-col bg-[#001f3f] p-5 text-white">
+        <aside className="hidden w-64 flex-shrink-0 flex-col bg-[#001f3f] p-5 text-white md:flex">
           <h2 className="text-xs font-bold uppercase tracking-wider text-white/70">
             Your search context
           </h2>
@@ -332,8 +332,8 @@ export default function AIPage() {
     <div className="flex min-h-screen flex-col bg-[#f4f6f9]">
       {isGuest && <GuestPreviewBanner />}
       <div className="flex flex-1">
-      {/* Left: context sidebar */}
-      <aside className="flex w-64 flex-shrink-0 flex-col bg-[#001f3f] p-5 text-white">
+      {/* Left: context sidebar — hidden on mobile so chat is full width */}
+      <aside className="hidden w-64 flex-shrink-0 flex-col bg-[#001f3f] p-5 text-white md:flex">
         <h2 className="text-xs font-bold uppercase tracking-wider text-white/70">
           Your search context
         </h2>

@@ -215,6 +215,15 @@
   .timeline-page .timeline-grid {
     grid-template-columns: 1fr;
   }
+  /* Progress card: stack "Overall progress 80%" and "Next up: ..." vertically to prevent overlap */
+  .timeline-page .timeline-progress-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .timeline-page .timeline-next-up {
+    text-align: left;
+  }
 }
 
 /* Phase card — roughly square, equal size */

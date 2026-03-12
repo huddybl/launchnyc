@@ -652,7 +652,7 @@ export default function DocumentsPage() {
 
             {/* Horizontal stepper: even distribution — step, line, step, line, ... with lines flexing equally */}
             <nav className="w-full min-w-0 overflow-hidden rounded-2xl border border-[#e8ecf2] bg-white px-2 py-4 shadow-sm sm:px-4 sm:py-5 md:px-6" aria-label="Application steps">
-              <div className="flex w-full items-start">
+              <div className="flex min-w-0 w-full items-start">
                 {TAB_IDS.map((tabId, index) => {
                   const isActive = activeTab === tabId;
                   const isCompleted = tabStatus[tabId] === "Complete";
@@ -666,17 +666,16 @@ export default function DocumentsPage() {
                           className="flex flex-col items-center gap-1.5"
                         >
                           <span
-                            className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border-2 text-xs font-semibold transition-colors ${
+                            className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-semibold transition-colors md:h-10 md:w-10 md:text-xs ${
                               isActive
                                 ? "border-[#001f3f] bg-[#001f3f] text-white"
                                 : isCompleted
                                   ? "border-emerald-500 bg-emerald-500 text-white"
                                   : "border-[#d1d5db] bg-white text-[#9ca3af]"
                             }`}
-                            style={{ height: 40, width: 40 }}
                           >
                             {isCompleted && !isActive ? (
-                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                              <svg className="h-4 w-4 md:h-5 md:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                             ) : (
                               index + 1
                             )}
@@ -692,8 +691,7 @@ export default function DocumentsPage() {
                       </div>
                       {index < TAB_IDS.length - 1 && (
                         <div
-                          className={`h-0.5 min-w-2 flex-1 self-center ${segmentGreen ? "bg-emerald-500" : "bg-[#e8ecf2]"}`}
-                          style={{ marginTop: 20 }}
+                          className={`mt-4 h-0.5 min-w-2 flex-1 self-center md:mt-5 ${segmentGreen ? "bg-emerald-500" : "bg-[#e8ecf2]"}`}
                           aria-hidden
                         />
                       )}
