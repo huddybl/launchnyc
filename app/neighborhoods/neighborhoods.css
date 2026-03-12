@@ -1,0 +1,103 @@
+/* Neighborhoods page — matches mockup Neighborhoods tab */
+.neighborhoods-page {
+  --bg: #f4f6f9;
+  --white: #ffffff;
+  --border: #dde2ea;
+  --text: #0f1826;
+  --muted: #6b7a8d;
+  --muted2: #a4b0be;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(15, 28, 60, 0.06);
+  --shadow-md: 0 3px 10px rgba(15, 28, 60, 0.09);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.neighborhoods-page .hoods-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 24px;
+}
+
+.neighborhoods-page .hood-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: all 0.13s;
+}
+.neighborhoods-page .hood-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.neighborhoods-page .hood-banner {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  background: var(--bg);
+}
+
+.neighborhoods-page .hood-body {
+  padding: 12px 14px;
+}
+.neighborhoods-page .hood-name {
+  font-family: var(--font-fraunces), "Georgia", serif;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.neighborhoods-page .hood-borough {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.neighborhoods-page .hood-vibe {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.neighborhoods-page .hood-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.neighborhoods-page .hood-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.neighborhoods-page .hood-stat-key {
+  font-size: 10px;
+  color: var(--muted2);
+}
+.neighborhoods-page .hood-stat-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.neighborhoods-page .hood-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.neighborhoods-page .hood-tag {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
