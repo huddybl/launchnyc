@@ -75,36 +75,29 @@ export default function LandingPage() {
   const currentLabel = PROGRESS_STAGES[progressStage].label;
   const displayPctInt = Math.round(displayPct);
 
+  const [minutes, setMinutes] = useState(10);
+  useEffect(() => {
+    if (minutes >= 20) return;
+    const id = setInterval(() => {
+      setMinutes((m) => (m >= 20 ? 20 : m + 1));
+    }, 200);
+    return () => clearInterval(id);
+  }, [minutes]);
+
   return (
-    <div className="min-h-screen w-full bg-white font-sans text-[#001f3f] antialiased">
-      {/* Nav: logo | progress bar (flex-grow, mx-12) | Log In + Get Started */}
-      <header className="sticky top-0 z-50 w-full border-b border-[#e5e7eb] bg-white px-8">
-        <nav className="flex items-center gap-12 py-4">
-          <Link href="/landing" className="flex flex-shrink-0 items-center">
+    <div className="min-h-screen w-full bg-[#f8f9ff] font-sans text-[#001f3f] antialiased">
+      {/* Nav: logo left, Log In + Get Started right; same surface #f8f9ff */}
+      <header className="sticky top-0 z-[100] w-full bg-[#f8f9ff] px-12 py-4">
+        <nav className="flex items-center justify-between">
+          <Link href="/landing" className="flex items-center">
             <img
               src="/logo.png"
               alt="LaunchNYC"
-              height={32}
-              className="h-8 w-auto"
+              height={56}
+              className="h-14 w-auto"
             />
           </Link>
-          <div className="min-w-0 flex-1 px-12">
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-[13px] font-medium text-[#001f3f]">
-                {currentLabel} — {displayPctInt}%
-              </span>
-            </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-[999px] bg-[#e5e7eb]">
-              <div
-                className="h-full rounded-[999px] bg-[#16a34a]"
-                style={{
-                  width: `${displayPct}%`,
-                  transition: transitionEnabled ? "width 0.05s linear" : "none",
-                }}
-              />
-            </div>
-          </div>
-          <div className="flex flex-shrink-0 items-center gap-4">
+          <div className="flex items-center gap-4">
             <Link
               href="/login"
               className="text-sm font-medium text-[#001f3f] no-underline transition-opacity hover:opacity-80"
@@ -121,13 +114,38 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      {/* 2. Hero — full-width outer (bg gradient), inner max-w 1280px, grid 1fr 1fr gap 80px */}
-      <section className="w-full py-16 sm:py-20 lg:py-24" style={{ background: "linear-gradient(135deg, #f8f9ff 0%, #ffffff 60%, #f0f4ff 100%)" }}>
+      {/* Progress bar row — same #f8f9ff, contained in hero max-width so edges align with headline + mockup */}
+      <div className="w-full bg-[#f8f9ff] py-4">
+        <div className={SECTION_INNER}>
+          <div className="relative h-11 w-full overflow-hidden rounded-[999px] bg-[#001f3f]">
+            <div
+              className="absolute left-0 top-0 h-full bg-[#16a34a]"
+              style={{
+                width: `${displayPct}%`,
+                transition: transitionEnabled ? "width 0.05s linear" : "none",
+              }}
+            />
+            <div className="relative flex h-full w-full items-center">
+              <div className="flex flex-1 justify-center">
+                <span className="text-sm font-semibold text-white" style={{ fontSize: "14px" }}>
+                  {currentLabel}
+                </span>
+              </div>
+              <span className="pr-4 text-lg font-bold text-white" style={{ fontSize: "18px" }}>
+                {displayPctInt}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Hero — same #f8f9ff surface */}
+      <section className="w-full bg-[#f8f9ff] py-16 sm:py-20 lg:py-24">
         <div className={SECTION_INNER}>
           <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[1fr_1fr] lg:gap-20">
           <div className="pl-0">
             <h1 className="text-4xl font-extrabold leading-[1.1] tracking-tight text-[#001f3f] sm:text-5xl lg:text-[60px]">
-              Your NYC lease application. Ready in <span className="text-[#16a34a]">20 minutes.</span>
+              Your NYC lease application. Ready in <span className="text-[#16a34a]">{Math.min(minutes, 20)} minutes.</span>
             </h1>
             <p className="mt-5 text-lg text-[#4b5563] leading-relaxed">
               Stop scrambling. LaunchNYC gets first-time renters organized, prepared, and moving fast — before the apartment is gone.
@@ -168,8 +186,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 3. Feature cards — full-width outer (bg), inner max-w 1280px */}
-      <section className="w-full border-t border-[#e8ecf2] bg-[#fafbfc] py-16 sm:py-20">
+      {/* 3. Feature cards — same #f8f9ff surface */}
+      <section className="w-full bg-[#f8f9ff] py-16 sm:py-20">
         <div className={SECTION_INNER}>
           <div className="grid gap-8 sm:grid-cols-3">
             <div className="rounded-xl border border-[#e8ecf2] bg-white p-6 shadow-sm">
@@ -209,8 +227,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 4. Everything you need — full-width outer (bg), inner max-w 1280px */}
-      <section className="w-full border-t border-[#e8ecf2] bg-white py-16 sm:py-20">
+      {/* 4. Everything you need — same #f8f9ff surface */}
+      <section className="w-full bg-[#f8f9ff] py-16 sm:py-20">
         <div className={SECTION_INNER}>
           <h2 className="text-center text-2xl font-bold tracking-tight text-[#001f3f] sm:text-3xl">
             Everything you need, in one place.
