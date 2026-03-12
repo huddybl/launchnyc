@@ -631,7 +631,7 @@ export default function DocumentsPage() {
                 Your Application Profile
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/95">
-                We know the hunt is madness. Fill this out once, and we’ll handle the rest. LaunchNYC uses this profile to auto-generate your application packages so you can hit ‘send’ before the open house even ends.
+                Every NYC apartment application asks for the same information. Fill it out once here, and you're done forever. One profile, instantly exported for every application you send — so you can move faster than everyone else.
               </p>
             </header>
 
