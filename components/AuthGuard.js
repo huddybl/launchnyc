@@ -39,12 +39,9 @@ export default function AuthGuard({ children }) {
       return;
     }
     const allowed = !!session || isGuest;
+    // Not logged in and no guest flag: only /landing and /login are allowed. Redirect to /landing (never to /login or /board).
     if (!allowed) {
-      if (pathname === "/") {
-        router.replace("/landing");
-        return;
-      }
-      if (pathname !== "/login" && pathname !== "/landing") {
+      if (pathname !== "/landing" && pathname !== "/login") {
         router.replace("/landing");
         return;
       }

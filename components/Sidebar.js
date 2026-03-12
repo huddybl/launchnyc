@@ -43,7 +43,7 @@ export default function Sidebar() {
 
   async function handleSignOut() {
     await supabase.auth.signOut();
-    router.replace("/login");
+    router.replace("/landing");
     router.refresh();
   }
 
