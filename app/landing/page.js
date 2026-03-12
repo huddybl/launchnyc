@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   FileText,
@@ -11,21 +12,99 @@ import {
 
 const SECTION_INNER = "mx-auto max-w-[1280px] px-8";
 
+const PROGRESS_STAGES = [
+  { label: "Set Up Your Search", start: 0, end: 25 },
+  { label: "Build Your List", start: 25, end: 50 },
+  { label: "Get Documents Ready", start: 50, end: 75 },
+  { label: "Sign Your Lease 🎉", start: 75, end: 100 },
+];
+
+const TICK_MS = 50;
+const TICKS_PER_STAGE = 60; // 3 seconds = 60 * 50ms
+
 export default function LandingPage() {
+  const [progressStage, setProgressStage] = useState(0);
+  const [tickIndex, setTickIndex] = useState(0);
+  const [displayPct, setDisplayPct] = useState(0);
+  const [transitionEnabled, setTransitionEnabled] = useState(true);
+  const tickIndexRef = useRef(0);
+  const progressStageRef = useRef(0);
+
+  useEffect(() => {
+    tickIndexRef.current = tickIndex;
+    progressStageRef.current = progressStage;
+  }, [tickIndex, progressStage]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const stage = progressStageRef.current;
+      const tick = tickIndexRef.current;
+      if (stage === 3 && tick === TICKS_PER_STAGE - 1) {
+        setTransitionEnabled(false);
+        setDisplayPct(0);
+        setProgressStage(0);
+        setTickIndex(0);
+        tickIndexRef.current = 0;
+        progressStageRef.current = 0;
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setTransitionEnabled(true);
+          });
+        });
+        return;
+      }
+      if (tick === TICKS_PER_STAGE - 1) {
+        setProgressStage((s) => s + 1);
+        progressStageRef.current = stage + 1;
+        setTickIndex(0);
+        tickIndexRef.current = 0;
+        const next = PROGRESS_STAGES[stage + 1];
+        setDisplayPct(next.start);
+        return;
+      }
+      const start = PROGRESS_STAGES[stage].start;
+      const end = PROGRESS_STAGES[stage].end;
+      const nextPct = start + (end - start) * (tick + 1) / TICKS_PER_STAGE;
+      setDisplayPct(nextPct);
+      setTickIndex((t) => t + 1);
+      tickIndexRef.current = tick + 1;
+    }, TICK_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  const currentLabel = PROGRESS_STAGES[progressStage].label;
+  const displayPctInt = Math.round(displayPct);
+
   return (
     <div className="min-h-screen w-full bg-white font-sans text-[#001f3f] antialiased">
-      {/* 1. Nav — full browser width, padding 32px only */}
-      <header className="sticky top-0 z-50 w-full border-b border-[#e8ecf2] bg-white px-8">
-        <nav className="flex items-center justify-between py-4">
-          <Link href="/landing" className="flex items-center">
+      {/* Nav: logo | progress bar (flex-grow, mx-12) | Log In + Get Started */}
+      <header className="sticky top-0 z-50 w-full border-b border-[#e5e7eb] bg-white px-8">
+        <nav className="flex items-center gap-12 py-4">
+          <Link href="/landing" className="flex flex-shrink-0 items-center">
             <img
               src="/logo.png"
               alt="LaunchNYC"
-              height={36}
-              className="h-9 w-auto"
+              height={32}
+              className="h-8 w-auto"
             />
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="min-w-0 flex-1 px-12">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[13px] font-medium text-[#001f3f]">
+                {currentLabel} — {displayPctInt}%
+              </span>
+            </div>
+            <div className="h-2.5 w-full overflow-hidden rounded-[999px] bg-[#e5e7eb]">
+              <div
+                className="h-full rounded-[999px] bg-[#16a34a]"
+                style={{
+                  width: `${displayPct}%`,
+                  transition: transitionEnabled ? "width 0.05s linear" : "none",
+                }}
+              />
+            </div>
+          </div>
+          <div className="flex flex-shrink-0 items-center gap-4">
             <Link
               href="/login"
               className="text-sm font-medium text-[#001f3f] no-underline transition-opacity hover:opacity-80"
@@ -42,13 +121,13 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      {/* 2. Hero — full-width outer (bg), inner max-w 1280px, grid 1fr 1fr gap 80px */}
-      <section className="w-full bg-white py-16 sm:py-20 lg:py-24">
+      {/* 2. Hero — full-width outer (bg gradient), inner max-w 1280px, grid 1fr 1fr gap 80px */}
+      <section className="w-full py-16 sm:py-20 lg:py-24" style={{ background: "linear-gradient(135deg, #f8f9ff 0%, #ffffff 60%, #f0f4ff 100%)" }}>
         <div className={SECTION_INNER}>
           <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[1fr_1fr] lg:gap-20">
           <div className="pl-0">
             <h1 className="text-4xl font-extrabold leading-[1.1] tracking-tight text-[#001f3f] sm:text-5xl lg:text-[60px]">
-              Your NYC lease application. Ready in 20 minutes.
+              Your NYC lease application. Ready in <span className="text-[#16a34a]">20 minutes.</span>
             </h1>
             <p className="mt-5 text-lg text-[#4b5563] leading-relaxed">
               Stop scrambling. LaunchNYC gets first-time renters organized, prepared, and moving fast — before the apartment is gone.
@@ -60,11 +139,12 @@ export default function LandingPage() {
               >
                 Get Started — it&apos;s free
               </Link>
+              <p className="mt-4 text-sm text-[#6b7280]">Join hundreds of new grads getting NYC-ready</p>
             </div>
           </div>
           <div className="flex items-center justify-end">
             {/* Browser window mockup */}
-            <div className="ml-auto w-full max-w-lg overflow-hidden rounded-lg border border-[#e8ecf2] bg-white shadow-[0_12px_40px_rgba(0,31,63,0.15)]">
+            <div className="ml-auto w-full max-w-lg overflow-hidden rounded-lg border border-[#e8ecf2] bg-white shadow-[0_32px_80px_rgba(0,0,0,0.18)]" style={{ transform: "none" }}>
               <div className="flex items-center gap-2 border-b border-[#2d2d2d] bg-[#2d2d2d] px-3 py-2.5">
                 <span className="h-3 w-3 rounded-full bg-[#ff5f57]" aria-hidden />
                 <span className="h-3 w-3 rounded-full bg-[#febc2e]" aria-hidden />
