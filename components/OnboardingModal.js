@@ -39,11 +39,12 @@ export default function OnboardingModal({ onComplete }) {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    budget_max: "",
+    budget_per_person: "",
     move_in_date: "",
     bedrooms: null,
     num_people: null,
     neighborhoods: [],
+    roommates: [""],
   });
 
   const checkProfile = useCallback(async () => {
@@ -83,13 +84,20 @@ export default function OnboardingModal({ onComplete }) {
       return;
     }
     setSaving(true);
+    const budgetPerPerson = form.budget_per_person ? Number(form.budget_per_person) : null;
+    const numPeople = form.num_people || 1;
+    const totalBudget = budgetPerPerson != null ? budgetPerPerson * numPeople : null;
+    const roommateNames = form.roommates.filter((s) => String(s).trim());
     const payload = {
       user_id: user.id,
-      budget_max: form.budget_max ? Number(form.budget_max) : null,
+      budget_per_person: budgetPerPerson,
+      total_budget: totalBudget,
+      budget_max: totalBudget,
       move_in_date: form.move_in_date || null,
       bedrooms: form.bedrooms,
       num_people: form.num_people,
       neighborhoods: form.neighborhoods.length > 0 ? form.neighborhoods : null,
+      roommates: roommateNames.length > 0 ? roommateNames : null,
     };
     console.log("[OnboardingModal] handleFinish: before insert", { user_id: user.id, payload });
     try {
@@ -222,18 +230,23 @@ export default function OnboardingModal({ onComplete }) {
               <div className="mt-6 space-y-4">
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-zinc-600">
-                    Monthly budget ($/mo)
+                    What&apos;s your budget per person per month?
                   </span>
                   <input
                     type="number"
                     min={0}
-                    value={form.budget_max}
+                    value={form.budget_per_person}
                     onChange={(e) =>
-                      setForm((f) => ({ ...f, budget_max: e.target.value }))
+                      setForm((f) => ({ ...f, budget_per_person: e.target.value }))
                     }
-                    placeholder="3500"
+                    placeholder="e.g. 1200"
                     className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-[#001f3f] placeholder-zinc-400 focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
                   />
+                  {form.budget_per_person && (
+                    <p className="mt-2 text-sm font-medium text-[#001f3f]">
+                      Total apartment budget: ${((Number(form.budget_per_person) || 0) * (form.num_people || 1)).toLocaleString()}/mo
+                    </p>
+                  )}
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-zinc-600">
@@ -308,6 +321,58 @@ export default function OnboardingModal({ onComplete }) {
                         </button>
                       );
                     })}
+                  </div>
+                </div>
+                <div>
+                  <span className="mb-2 block text-xs font-medium text-zinc-600">
+                    Add your roommates (optional)
+                  </span>
+                  <p className="mb-2 text-xs text-zinc-500">
+                    First names only — we&apos;ll use these for your application materials.
+                  </p>
+                  <div className="space-y-2">
+                    {form.roommates.map((name, i) => (
+                      <div key={i} className="flex gap-2">
+                        <input
+                          type="text"
+                          value={name}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              roommates: f.roommates.map((n, j) => (j === i ? e.target.value : n)),
+                            }))
+                          }
+                          placeholder="Roommate first name"
+                          className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-[#001f3f] placeholder-zinc-400 focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
+                        />
+                        {i === form.roommates.length - 1 ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setForm((f) => ({ ...f, roommates: [...f.roommates, ""] }))
+                            }
+                            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50"
+                            aria-label="Add another roommate"
+                          >
+                            +
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                roommates: f.roommates.filter((_, j) => j !== i),
+                              }))
+                            }
+                            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50"
+                            aria-label="Remove roommate"
+                          >
+                            −
+                          </button>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

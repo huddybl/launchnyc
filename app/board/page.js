@@ -123,6 +123,7 @@ export default function BoardPage() {
     beds: "",
     baths: "",
     listing_url: "",
+    notes: "",
   });
   const [filterSearch, setFilterSearch] = useState("");
   const [filterNeighborhood, setFilterNeighborhood] = useState("");
@@ -585,6 +586,7 @@ export default function BoardPage() {
       beds: "",
       baths: "",
       listing_url: "",
+      notes: "",
     });
     setAddFormOpen(true);
   }
@@ -601,6 +603,7 @@ export default function BoardPage() {
       baths: addForm.baths.trim() || null,
       status: "saved",
       listing_url: addForm.listing_url.trim() || null,
+      notes: addForm.notes.trim() || null,
     };
     try {
       const { error: err } = await supabase.from("apartments").insert(payload);
@@ -1019,6 +1022,16 @@ export default function BoardPage() {
                   placeholder="https://..."
                   value={addForm.listing_url}
                   onChange={(e) => setAddForm((f) => ({ ...f, listing_url: e.target.value }))}
+                />
+              </div>
+              <div className="form-field full">
+                <label className="form-label">Notes (optional)</label>
+                <textarea
+                  className="form-input min-h-[80px] resize-y"
+                  placeholder="e.g. No fee, available June 1"
+                  value={addForm.notes}
+                  onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))}
+                  rows={3}
                 />
               </div>
               <div className="form-actions">

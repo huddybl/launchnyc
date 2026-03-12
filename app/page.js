@@ -64,7 +64,11 @@ export default function MySearchPage() {
     bedrooms: null,
     num_people: null,
     neighborhoods: [],
+    roommates: [],
   });
+  const [roommatesEditing, setRoommatesEditing] = useState(false);
+  const [roommatesForm, setRoommatesForm] = useState([""]);
+  const [roommatesSaving, setRoommatesSaving] = useState(false);
   const [invites, setInvites] = useState([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [sendingInvite, setSendingInvite] = useState(false);
@@ -84,7 +88,10 @@ export default function MySearchPage() {
         bedrooms: data.bedrooms ?? null,
         num_people: data.num_people ?? null,
         neighborhoods: Array.isArray(data.neighborhoods) ? data.neighborhoods : [],
+        roommates: Array.isArray(data.roommates) ? data.roommates : [],
       });
+      const r = Array.isArray(data.roommates) ? data.roommates : [];
+      setRoommatesForm(r.length > 0 ? [...r, ""] : [""]);
     }
   }, [user?.id]);
 
@@ -136,6 +143,7 @@ export default function MySearchPage() {
         num_people: form.num_people,
         neighborhoods:
           form.neighborhoods.length > 0 ? form.neighborhoods : null,
+        roommates: form.roommates.length > 0 ? form.roommates : null,
       };
       const { error } = await supabase
         .from("user_profiles")
@@ -157,6 +165,32 @@ export default function MySearchPage() {
         ? prev.neighborhoods.filter((n) => n !== name)
         : [...prev.neighborhoods, name],
     }));
+  }
+
+  async function handleSaveRoommates() {
+    if (!user?.id) return;
+    setRoommatesSaving(true);
+    const names = roommatesForm.map((s) => String(s).trim()).filter(Boolean);
+    try {
+      const { error } = await supabase
+        .from("user_profiles")
+        .update({ roommates: names.length > 0 ? names : null })
+        .eq("user_id", user.id);
+      if (!error) {
+        setForm((f) => ({ ...f, roommates: names }));
+        setProfile((p) => (p ? { ...p, roommates: names } : null));
+        setRoommatesForm(names.length > 0 ? [...names, ""] : [""]);
+        setRoommatesEditing(false);
+      }
+    } finally {
+      setRoommatesSaving(false);
+    }
+  }
+
+  function startRoommatesEdit() {
+    const r = form.roommates.length ? [...form.roommates, ""] : [""];
+    setRoommatesForm(r);
+    setRoommatesEditing(true);
   }
 
   async function handleSendInvite(e) {
@@ -464,6 +498,100 @@ export default function MySearchPage() {
                         </button>
                       ))}
                     </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-[#dde2ea] bg-white p-6 shadow-sm">
+              <h2 className="text-sm font-semibold text-[#001f3f]">
+                Your roommates
+              </h2>
+              {!roommatesEditing ? (
+                <>
+                  {form.roommates.length > 0 ? (
+                    <ul className="mt-3 flex flex-wrap gap-2">
+                      {form.roommates.map((name, i) => (
+                        <li
+                          key={i}
+                          className="inline-flex rounded-full bg-[#eef2f9] px-3 py-1 text-sm font-medium text-[#001f3f]"
+                        >
+                          {name}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-zinc-500">
+                      No roommates added yet
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={startRoommatesEdit}
+                    className="mt-3 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                  >
+                    {form.roommates.length > 0 ? "Edit roommates" : "Add roommates"}
+                  </button>
+                </>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  {roommatesForm.map((name, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) =>
+                          setRoommatesForm((prev) =>
+                            prev.map((n, j) => (j === i ? e.target.value : n))
+                          )
+                        }
+                        placeholder="First name"
+                        className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-[#001f3f] placeholder-zinc-400 focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
+                      />
+                      {i === roommatesForm.length - 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => setRoommatesForm((p) => [...p, ""])}
+                          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50"
+                          aria-label="Add another"
+                        >
+                          +
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRoommatesForm((p) => p.filter((_, j) => j !== i))
+                          }
+                          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50"
+                          aria-label="Remove"
+                        >
+                          −
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSaveRoommates}
+                      disabled={roommatesSaving}
+                      className="rounded-lg bg-[#001f3f] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                    >
+                      {roommatesSaving ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRoommatesEditing(false);
+                        setRoommatesForm(
+                          form.roommates.length > 0 ? [...form.roommates, ""] : [""]
+                        );
+                      }}
+                      className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </div>
               )}
