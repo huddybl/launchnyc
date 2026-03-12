@@ -208,7 +208,10 @@
   width: 100%;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
+  .timeline-page .timeline-content-wrap {
+    padding: 24px 16px 48px;
+  }
   .timeline-page .timeline-grid {
     grid-template-columns: 1fr;
   }

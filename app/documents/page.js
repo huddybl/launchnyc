@@ -621,12 +621,12 @@ export default function DocumentsPage() {
   return (
     <div className="min-h-screen bg-[#f4f6f9] text-[#0f1826]">
       {isGuest && <GuestPreviewBanner />}
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
           {/* Main content: full width of first column */}
           <div className="min-w-0 space-y-6">
             {/* Hero banner */}
-            <header className="rounded-2xl bg-[#001f3f] px-8 py-8 text-white shadow-lg">
+            <header className="rounded-2xl bg-[#001f3f] px-4 py-6 text-white shadow-lg sm:px-8 sm:py-8">
               <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
                 Your Application Profile
               </h1>
@@ -908,7 +908,7 @@ export default function DocumentsPage() {
                       Employment
                     </span>
                   </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="col-span-2">
                     <label className={labelBase}>Employer name</label>
                     <input
@@ -1039,7 +1039,7 @@ export default function DocumentsPage() {
                       Previous Address
                     </span>
                   </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="col-span-2">
                     <label className={labelBase}>Previous address</label>
                     <input
@@ -1112,7 +1112,7 @@ export default function DocumentsPage() {
                       Guarantor
                     </span>
                   </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className={labelBase}>Name</label>
                     <input
@@ -1230,7 +1230,7 @@ export default function DocumentsPage() {
                       References & Emergency
                     </span>
                   </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <label className={labelBase}>Personal reference name</label>
                     <input
