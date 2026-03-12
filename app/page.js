@@ -64,7 +64,7 @@ export default function MySearchPage() {
     bedrooms: null,
     num_people: null,
     neighborhoods: [],
-    roommates: [],
+    roommate_emails: [],
   });
   const [roommatesEditing, setRoommatesEditing] = useState(false);
   const [roommatesForm, setRoommatesForm] = useState([""]);
@@ -88,9 +88,9 @@ export default function MySearchPage() {
         bedrooms: data.bedrooms ?? null,
         num_people: data.num_people ?? null,
         neighborhoods: Array.isArray(data.neighborhoods) ? data.neighborhoods : [],
-        roommates: Array.isArray(data.roommates) ? data.roommates : [],
+        roommate_emails: Array.isArray(data.roommate_emails) ? data.roommate_emails : [],
       });
-      const r = Array.isArray(data.roommates) ? data.roommates : [];
+      const r = Array.isArray(data.roommate_emails) ? data.roommate_emails : [];
       setRoommatesForm(r.length > 0 ? [...r, ""] : [""]);
     }
   }, [user?.id]);
@@ -143,7 +143,6 @@ export default function MySearchPage() {
         num_people: form.num_people,
         neighborhoods:
           form.neighborhoods.length > 0 ? form.neighborhoods : null,
-        roommates: form.roommates.length > 0 ? form.roommates : null,
       };
       const { error } = await supabase
         .from("user_profiles")
@@ -167,19 +166,24 @@ export default function MySearchPage() {
     }));
   }
 
-  async function handleSaveRoommates() {
+  async function handleSaveRoommates(emailsOverride) {
     if (!user?.id) return;
     setRoommatesSaving(true);
-    const names = roommatesForm.map((s) => String(s).trim()).filter(Boolean);
+    const emails = Array.isArray(emailsOverride)
+      ? emailsOverride
+      : roommatesForm.map((s) => String(s).trim()).filter(Boolean);
     try {
       const { error } = await supabase
         .from("user_profiles")
-        .update({ roommates: names.length > 0 ? names : null })
-        .eq("user_id", user.id);
+        .upsert(
+          { user_id: user.id, roommate_emails: emails.length > 0 ? emails : null },
+          { onConflict: "user_id" }
+        )
+        .select();
       if (!error) {
-        setForm((f) => ({ ...f, roommates: names }));
-        setProfile((p) => (p ? { ...p, roommates: names } : null));
-        setRoommatesForm(names.length > 0 ? [...names, ""] : [""]);
+        setForm((f) => ({ ...f, roommate_emails: emails }));
+        setProfile((p) => (p ? { ...p, roommate_emails: emails } : { user_id: user.id, roommate_emails: emails }));
+        setRoommatesForm(emails.length > 0 ? [...emails, ""] : [""]);
         setRoommatesEditing(false);
       }
     } finally {
@@ -188,7 +192,7 @@ export default function MySearchPage() {
   }
 
   function startRoommatesEdit() {
-    const r = form.roommates.length ? [...form.roommates, ""] : [""];
+    const r = (form.roommate_emails && form.roommate_emails.length) ? [...form.roommate_emails, ""] : [""];
     setRoommatesForm(r);
     setRoommatesEditing(true);
   }
@@ -283,6 +287,112 @@ export default function MySearchPage() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Your Roommates card — always visible for logged-in users so it never fails silently */}
+        <div className="rounded-xl border border-[#dde2ea] bg-white p-6 shadow-sm">
+          <h2 className="text-sm font-semibold text-[#001f3f]">
+            Your Roommates
+          </h2>
+          {!roommatesEditing ? (
+            <>
+              {(form.roommate_emails && form.roommate_emails.length > 0) ? (
+                <ul className="mt-3 flex flex-wrap gap-2">
+                  {form.roommate_emails.map((email, i) => (
+                    <li
+                      key={i}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[#001f3f] pl-3 pr-1 py-1 text-sm font-medium text-white"
+                    >
+                      <span>{email}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = form.roommate_emails.filter((_, j) => j !== i);
+                          handleSaveRoommates(next);
+                        }}
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-white hover:bg-white/20"
+                        aria-label={`Remove ${email}`}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-zinc-500">
+                  No roommates added yet
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={startRoommatesEdit}
+                className="mt-3 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              >
+                {(form.roommate_emails && form.roommate_emails.length > 0) ? "Edit" : "Add Roommates"}
+              </button>
+            </>
+          ) : (
+            <div className="mt-4 space-y-2">
+              {roommatesForm.map((email, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) =>
+                      setRoommatesForm((prev) =>
+                        prev.map((em, j) => (j === i ? e.target.value : em))
+                      )
+                    }
+                    placeholder="roommate@email.com"
+                    className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-[#001f3f] placeholder-zinc-400 focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
+                  />
+                  {i === roommatesForm.length - 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setRoommatesForm((p) => [...p, ""])}
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50"
+                      aria-label="Add another"
+                    >
+                      +
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRoommatesForm((p) => p.filter((_, j) => j !== i))
+                      }
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50"
+                      aria-label="Remove"
+                    >
+                      −
+                    </button>
+                  )}
+                </div>
+              ))}
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveRoommates}
+                  disabled={roommatesSaving}
+                  className="rounded-lg bg-[#001f3f] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                >
+                  {roommatesSaving ? "Saving…" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoommatesEditing(false);
+                    setRoommatesForm(
+                      (form.roommate_emails && form.roommate_emails.length > 0) ? [...form.roommate_emails, ""] : [""]
+                    );
+                  }}
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {!profile ? (
@@ -498,100 +608,6 @@ export default function MySearchPage() {
                         </button>
                       ))}
                     </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-xl border border-[#dde2ea] bg-white p-6 shadow-sm">
-              <h2 className="text-sm font-semibold text-[#001f3f]">
-                Your roommates
-              </h2>
-              {!roommatesEditing ? (
-                <>
-                  {form.roommates.length > 0 ? (
-                    <ul className="mt-3 flex flex-wrap gap-2">
-                      {form.roommates.map((name, i) => (
-                        <li
-                          key={i}
-                          className="inline-flex rounded-full bg-[#eef2f9] px-3 py-1 text-sm font-medium text-[#001f3f]"
-                        >
-                          {name}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-2 text-sm text-zinc-500">
-                      No roommates added yet
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={startRoommatesEdit}
-                    className="mt-3 rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    {form.roommates.length > 0 ? "Edit roommates" : "Add roommates"}
-                  </button>
-                </>
-              ) : (
-                <div className="mt-4 space-y-2">
-                  {roommatesForm.map((name, i) => (
-                    <div key={i} className="flex gap-2">
-                      <input
-                        type="text"
-                        value={name}
-                        onChange={(e) =>
-                          setRoommatesForm((prev) =>
-                            prev.map((n, j) => (j === i ? e.target.value : n))
-                          )
-                        }
-                        placeholder="First name"
-                        className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-[#001f3f] placeholder-zinc-400 focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
-                      />
-                      {i === roommatesForm.length - 1 ? (
-                        <button
-                          type="button"
-                          onClick={() => setRoommatesForm((p) => [...p, ""])}
-                          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50"
-                          aria-label="Add another"
-                        >
-                          +
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setRoommatesForm((p) => p.filter((_, j) => j !== i))
-                          }
-                          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50"
-                          aria-label="Remove"
-                        >
-                          −
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handleSaveRoommates}
-                      disabled={roommatesSaving}
-                      className="rounded-lg bg-[#001f3f] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                    >
-                      {roommatesSaving ? "Saving…" : "Save"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRoommatesEditing(false);
-                        setRoommatesForm(
-                          form.roommates.length > 0 ? [...form.roommates, ""] : [""]
-                        );
-                      }}
-                      className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-                    >
-                      Cancel
-                    </button>
                   </div>
                 </div>
               )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -44,7 +44,7 @@ export default function OnboardingModal({ onComplete }) {
     bedrooms: null,
     num_people: null,
     neighborhoods: [],
-    roommates: [""],
+    roommate_emails: [""],
   });
 
   const checkProfile = useCallback(async () => {
@@ -77,6 +77,13 @@ export default function OnboardingModal({ onComplete }) {
   }, [user?.id, isGuest, checkProfile]);
 
   const visible = profileMissing || onboardingRequested;
+  const prevVisibleRef = useRef(false);
+
+  // When modal first opens, start at step 1 so all 4 steps run in order
+  useEffect(() => {
+    if (visible && !prevVisibleRef.current) setStep(1);
+    prevVisibleRef.current = !!visible;
+  }, [visible]);
 
   async function handleFinish() {
     if (!user?.id) {
@@ -87,7 +94,7 @@ export default function OnboardingModal({ onComplete }) {
     const budgetPerPerson = form.budget_per_person ? Number(form.budget_per_person) : null;
     const numPeople = form.num_people || 1;
     const totalBudget = budgetPerPerson != null ? budgetPerPerson * numPeople : null;
-    const roommateNames = form.roommates.filter((s) => String(s).trim());
+    const emails = form.roommate_emails.filter((s) => String(s).trim());
     const payload = {
       user_id: user.id,
       budget_per_person: budgetPerPerson,
@@ -97,7 +104,7 @@ export default function OnboardingModal({ onComplete }) {
       bedrooms: form.bedrooms,
       num_people: form.num_people,
       neighborhoods: form.neighborhoods.length > 0 ? form.neighborhoods : null,
-      roommates: roommateNames.length > 0 ? roommateNames : null,
+      roommate_emails: emails.length > 0 ? emails : null,
     };
     console.log("[OnboardingModal] handleFinish: before insert", { user_id: user.id, payload });
     try {
@@ -242,11 +249,6 @@ export default function OnboardingModal({ onComplete }) {
                     placeholder="e.g. 1200"
                     className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-[#001f3f] placeholder-zinc-400 focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
                   />
-                  {form.budget_per_person && (
-                    <p className="mt-2 text-sm font-medium text-[#001f3f]">
-                      Total apartment budget: ${((Number(form.budget_per_person) || 0) * (form.num_people || 1)).toLocaleString()}/mo
-                    </p>
-                  )}
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-xs font-medium text-zinc-600">
@@ -322,34 +324,36 @@ export default function OnboardingModal({ onComplete }) {
                       );
                     })}
                   </div>
+                  {form.budget_per_person && form.num_people && (
+                    <p className="mt-2 text-sm font-medium text-[#001f3f]">
+                      Total apartment budget: ${((Number(form.budget_per_person) || 0) * (form.num_people || 1)).toLocaleString()}/mo
+                    </p>
+                  )}
                 </div>
                 <div>
                   <span className="mb-2 block text-xs font-medium text-zinc-600">
-                    Add your roommates (optional)
+                    Add your roommates by email (optional)
                   </span>
-                  <p className="mb-2 text-xs text-zinc-500">
-                    First names only — we&apos;ll use these for your application materials.
-                  </p>
                   <div className="space-y-2">
-                    {form.roommates.map((name, i) => (
+                    {form.roommate_emails.map((email, i) => (
                       <div key={i} className="flex gap-2">
                         <input
-                          type="text"
-                          value={name}
+                          type="email"
+                          value={email}
                           onChange={(e) =>
                             setForm((f) => ({
                               ...f,
-                              roommates: f.roommates.map((n, j) => (j === i ? e.target.value : n)),
+                              roommate_emails: f.roommate_emails.map((em, j) => (j === i ? e.target.value : em)),
                             }))
                           }
-                          placeholder="Roommate first name"
+                          placeholder="roommate@email.com"
                           className="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm text-[#001f3f] placeholder-zinc-400 focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
                         />
-                        {i === form.roommates.length - 1 ? (
+                        {i === form.roommate_emails.length - 1 ? (
                           <button
                             type="button"
                             onClick={() =>
-                              setForm((f) => ({ ...f, roommates: [...f.roommates, ""] }))
+                              setForm((f) => ({ ...f, roommate_emails: [...f.roommate_emails, ""] }))
                             }
                             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50"
                             aria-label="Add another roommate"
@@ -362,7 +366,7 @@ export default function OnboardingModal({ onComplete }) {
                             onClick={() =>
                               setForm((f) => ({
                                 ...f,
-                                roommates: f.roommates.filter((_, j) => j !== i),
+                                roommate_emails: f.roommate_emails.filter((_, j) => j !== i),
                               }))
                             }
                             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50"

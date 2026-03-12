@@ -114,7 +114,11 @@ export default function TimelinePage() {
   const hasBudgetAndNeighborhoods =
     userProfile?.budget_max != null ||
     (Array.isArray(userProfile?.neighborhoods) && userProfile.neighborhoods.length > 0);
-  const hasMoveInDate = !!userProfile?.move_in_date;
+  // Only treat move_in_date as set when it's a real value (not null/undefined/empty)
+  const moveInDateRaw = userProfile?.move_in_date;
+  const hasMoveInDate =
+    moveInDateRaw != null &&
+    String(moveInDateRaw).trim() !== "";
   const hasRenterStart = renterProfile && filled(renterProfile.full_name) && filled(renterProfile.email);
   const hasGuarantor = renterProfile && filled(renterProfile.guarantor_name);
   const { touring: touringCount, applying: applyingCount, signed: signedCount } = apartmentCounts;
