@@ -294,21 +294,33 @@ export default function BoardPage() {
       return;
     }
     try {
-      const q = supabase
-        .from("apartments")
-        .select("*")
-        .order("created_at", { ascending: false });
       if (boardMode === "group" && userGroup?.id) {
-        q.eq("group_id", userGroup.id);
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(
+          `/api/apartments?group_id=${encodeURIComponent(userGroup.id)}`,
+          { headers: { Authorization: `Bearer ${session?.access_token ?? ""}` } }
+        );
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(json?.error ?? "Failed to load group apartments");
+          setApartments([]);
+        } else {
+          setApartments(Array.isArray(json) ? json : []);
+        }
       } else {
-        q.eq("user_id", user.id).is("group_id", null);
-      }
-      const { data, error: err } = await q;
-      if (err) {
-        setError(err.message);
-        setApartments([]);
-      } else {
-        setApartments(Array.isArray(data) ? data : []);
+        const q = supabase
+          .from("apartments")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .eq("user_id", user.id)
+          .is("group_id", null);
+        const { data, error: err } = await q;
+        if (err) {
+          setError(err.message);
+          setApartments([]);
+        } else {
+          setApartments(Array.isArray(data) ? data : []);
+        }
       }
     } catch (e) {
       setError(e?.message ?? "Failed to load apartments");

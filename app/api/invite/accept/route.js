@@ -54,6 +54,18 @@ export async function POST(request) {
     return NextResponse.json({ error: "This invite was sent to a different email" }, { status: 403 });
   }
 
+  const { data: existing } = await supabaseAdmin
+    .from("group_members")
+    .select("group_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (existing) {
+    return NextResponse.json(
+      { error: "You're already in a group. Leave your current group first to join a new one." },
+      { status: 400 }
+    );
+  }
+
   const { error: memberError } = await supabaseAdmin
     .from("group_members")
     .insert({ group_id: invite.group_id, user_id: user.id });

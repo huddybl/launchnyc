@@ -126,29 +126,15 @@ export default function AccountPage() {
     }
     const { data: members } = await supabase
       .from("group_members")
-      .select("user_id, joined_at")
+      .select("user_id, joined_at, user_emails(email)")
       .eq("group_id", group.id)
       .order("joined_at", { ascending: true });
-    const memberList = members ?? [];
-    if (memberList.length === 0) {
-      setGroupMembers([]);
-      return;
-    }
-    const userIds = memberList.map((m) => m.user_id).filter(Boolean);
-    const { data: profiles } = await supabase
-      .from("user_profiles")
-      .select("user_id, full_name, email")
-      .in("user_id", userIds);
-    const byId = {};
-    (profiles ?? []).forEach((p) => { byId[p.user_id] = p; });
-    setGroupMembers(
-      memberList.map((m) => ({
-        user_id: m.user_id,
-        joined_at: m.joined_at,
-        full_name: byId[m.user_id]?.full_name ?? null,
-        email: byId[m.user_id]?.email ?? null,
-      }))
-    );
+    const memberList = (members ?? []).map((m) => ({
+      user_id: m.user_id,
+      joined_at: m.joined_at,
+      email: m.user_emails?.email ?? null,
+    }));
+    setGroupMembers(memberList);
     const { data: invites } = await supabase
       .from("group_invites")
       .select("id, invited_email, status, created_at")
@@ -763,31 +749,33 @@ export default function AccountPage() {
                 )}
               </div>
 
-              <div className="mt-4">
-                <p className="text-xs font-medium text-[#6b7280]">Invite a roommate</p>
-                <form onSubmit={handleSendInvite} className="mt-1 flex flex-wrap items-center gap-2">
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => { setInviteEmail(e.target.value); setInviteSuccess(false); setGroupError(null); }}
-                    placeholder="roommate@email.com"
-                    className="rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm text-[#001f3f] placeholder-[#9ca3af] focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
-                  />
-                  <button
-                    type="submit"
-                    disabled={sendingInvite || !inviteEmail.trim()}
-                    className="rounded-lg bg-[#001f3f] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
-                  >
-                    {sendingInvite ? "Sending…" : "Send Invite"}
-                  </button>
-                </form>
-                {inviteSuccess && (
-                  <p className="mt-2 text-sm font-medium text-green-600">Invite sent!</p>
-                )}
-                {groupError && (
-                  <p className="mt-2 text-sm text-red-600">{groupError}</p>
-                )}
-              </div>
+              {isGroupCreator && (
+                <div className="mt-4">
+                  <p className="text-xs font-medium text-[#6b7280]">Invite a roommate</p>
+                  <form onSubmit={handleSendInvite} className="mt-1 flex flex-wrap items-center gap-2">
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => { setInviteEmail(e.target.value); setInviteSuccess(false); setGroupError(null); }}
+                      placeholder="roommate@email.com"
+                      className="rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm text-[#001f3f] placeholder-[#9ca3af] focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={sendingInvite || !inviteEmail.trim()}
+                      className="rounded-lg bg-[#001f3f] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                    >
+                      {sendingInvite ? "Sending…" : "Send Invite"}
+                    </button>
+                  </form>
+                  {inviteSuccess && (
+                    <p className="mt-2 text-sm font-medium text-green-600">Invite sent!</p>
+                  )}
+                  {groupError && (
+                    <p className="mt-2 text-sm text-red-600">{groupError}</p>
+                  )}
+                </div>
+              )}
 
               {groupInvites.length > 0 && (
                 <div className="mt-3">

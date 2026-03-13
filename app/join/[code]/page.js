@@ -17,11 +17,14 @@ export default function JoinGroupPage() {
   const code = params?.code ?? "";
   const [status, setStatus] = useState("loading");
   const [groupName, setGroupName] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   useEffect(() => {
     console.log("[Join] code:", code);
+    setErrorMessage(null);
     if (!code) {
       setStatus("error");
+      setErrorMessage("Invalid or expired invite");
       return;
     }
 
@@ -47,6 +50,7 @@ export default function JoinGroupPage() {
             if (cancelled) return;
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
+              setErrorMessage(data?.error ?? "Invalid or expired invite");
               setStatus("error");
               return;
             }
@@ -63,6 +67,8 @@ export default function JoinGroupPage() {
             if (cancelled) return;
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              setErrorMessage(data?.error ?? "Something went wrong");
               setStatus("error");
               return;
             }
@@ -85,6 +91,7 @@ export default function JoinGroupPage() {
           }
           setStatus("not_logged_in");
         } else {
+          setErrorMessage(data?.error ?? "Invalid or expired invite");
           setStatus("error");
         }
       } else {
@@ -98,6 +105,7 @@ export default function JoinGroupPage() {
           }
           setStatus("not_logged_in");
         } else {
+          setErrorMessage(data?.error ?? "Invalid or expired invite");
           setStatus("error");
         }
       }
@@ -108,6 +116,7 @@ export default function JoinGroupPage() {
   }, [code, router]);
 
   if (status === "error") {
+    const message = errorMessage ?? "Invalid or expired invite";
     return (
       <div className="flex min-h-screen w-full flex-col bg-[#f5f6f7]">
         <header className="flex h-14 items-center border-b border-[#e5e7eb] bg-white px-6">
@@ -117,8 +126,10 @@ export default function JoinGroupPage() {
         </header>
         <div className="flex flex-1 items-center justify-center px-6 py-12">
           <div className="text-center">
-            <h1 className="text-xl font-semibold text-[#001f3f]">Invalid or expired invite</h1>
-            <p className="mt-2 text-sm text-[#6b7280]">This invite may be wrong or no longer valid.</p>
+            <h1 className="text-xl font-semibold text-[#001f3f]">{message}</h1>
+            <p className="mt-2 text-sm text-[#6b7280]">
+              {errorMessage?.includes("already in a group") ? "You can leave your current group from your account page, then try this invite again." : "This invite may be wrong or no longer valid."}
+            </p>
             <Link
               href="/board"
               className="mt-4 inline-block rounded-lg bg-[#001f3f] px-4 py-2.5 text-sm font-semibold text-white no-underline hover:opacity-90"
