@@ -111,7 +111,7 @@ export async function POST(request) {
     return NextResponse.json({ error: err?.message ?? "group_invites insert failed" }, { status: 500 });
   }
 
-  const joinUrl = `https://launchnyc.vercel.app/join/${invite.id}`;
+  const joinUrl = `https://launchnyc.app/join/${invite.id}`;
   const subject = `${inviterEmail} invited you to search for apartments together on LaunchNYC`;
 
   const html = `

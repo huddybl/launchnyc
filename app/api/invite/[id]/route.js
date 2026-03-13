@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
+);
+
 export async function GET(_request, { params }) {
   const id = params?.id;
   if (!id || typeof id !== "string") {
     return NextResponse.json({ error: "Invalid invite id" }, { status: 400 });
   }
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ""
-  );
-  const { data: invite, error } = await supabase
+  const { data: invite, error } = await supabaseAdmin
     .from("group_invites")
     .select("*, search_groups(name)")
     .eq("id", id.trim())
