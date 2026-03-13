@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import JSZip from "jszip";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import GuestPreviewBanner from "@/components/GuestPreviewBanner";
@@ -31,6 +32,8 @@ const DOCUMENT_PATH_COLUMNS = {
 };
 
 const BUCKET_NAME = "renter-documents";
+const DOCUMENTS_BUCKET = "documents";
+const ACCEPT_UPLOAD = "application/pdf,.pdf,image/*";
 
 const defaultProfile = {
   full_name: "",
@@ -89,6 +92,7 @@ const defaultChecklist = {
 };
 
 const defaultFileNames = {};
+const defaultDocumentFiles = {};
 
 const TAB_IDS = ["personal", "employment", "previous_guarantor", "references", "documents"];
 const TAB_LABELS = {
@@ -180,14 +184,17 @@ export default function DocumentsPage() {
   const [profile, setProfile] = useState(defaultProfile);
   const [checklist, setChecklist] = useState(defaultChecklist);
   const [fileNames, setFileNames] = useState(defaultFileNames);
+  const [documentFilesByKey, setDocumentFilesByKey] = useState(defaultDocumentFiles);
   const [loading, setLoading] = useState(true);
   const [saveMessage, setSaveMessage] = useState(null);
   const [uploadingKey, setUploadingKey] = useState(null);
+  const [removingKey, setRemovingKey] = useState(null);
   const profileRef = useRef(profile);
   useEffect(() => {
     profileRef.current = profile;
   }, [profile]);
   const [exportPdfLoading, setExportPdfLoading] = useState(false);
+  const [downloadPackageLoading, setDownloadPackageLoading] = useState(false);
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState("personal");
   const fileInputRefs = useRef({});
@@ -209,9 +216,11 @@ export default function DocumentsPage() {
     const [
       { data: p, error: profileError },
       { data: dcRow, error: checklistError },
+      { data: docFiles, error: docFilesError },
     ] = await Promise.all([
       supabase.from("renter_profiles").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("document_checklist").select("*").eq("user_id", user.id).maybeSingle(),
+      supabase.from("document_files").select("id, document_type, file_url, filename").eq("user_id", user.id),
     ]);
     if (profileError) {
       console.error("[Documents] fetchData renter_profiles error:", profileError);
@@ -220,11 +229,22 @@ export default function DocumentsPage() {
     if (checklistError) {
       console.error("[Documents] fetchData document_checklist error:", checklistError);
     }
+    if (docFilesError) {
+      console.error("[Documents] fetchData document_files error:", docFilesError);
+    }
     const nextChecklist = {};
     CHECKLIST_ITEMS.forEach(({ key }) => {
       nextChecklist[key] = dcRow && dcRow[key] === true;
     });
     setChecklist(nextChecklist);
+
+    const byKey = {};
+    if (Array.isArray(docFiles)) {
+      docFiles.forEach((row) => {
+        byKey[row.document_type] = { id: row.id, file_url: row.file_url, filename: row.filename };
+      });
+    }
+    setDocumentFilesByKey(byKey);
 
     if (p) {
       setProfile({
@@ -381,6 +401,66 @@ export default function DocumentsPage() {
     }
   }
 
+  function sanitizeForFilename(name) {
+    if (!name || typeof name !== "string") return "document";
+    return name
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_-]/g, "")
+      .slice(0, 40) || "document";
+  }
+
+  async function handleDownloadDocumentPackage() {
+    if (!user?.id) return;
+    const entries = Object.entries(documentFilesByKey);
+    if (entries.length === 0) return;
+    setDownloadPackageLoading(true);
+    setSaveMessage(null);
+    try {
+      const zip = new JSZip();
+      const yourName = sanitizeForFilename(profile?.full_name);
+
+      for (const [documentType, entry] of entries) {
+        const res = await fetch(entry.file_url);
+        if (!res.ok) throw new Error(`Failed to fetch ${documentType}`);
+        const blob = await res.blob();
+        const ext = (entry.filename && entry.filename.includes("."))
+          ? entry.filename.slice(entry.filename.lastIndexOf("."))
+          : ".pdf";
+        const cleanName = `${documentType}_${yourName}${ext}`;
+        zip.file(cleanName, blob);
+      }
+
+      const pdfRes = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile, checklist, apartment: null }),
+      });
+      if (!pdfRes.ok) {
+        const errBody = await pdfRes.json().catch(() => ({}));
+        throw new Error(errBody.error || pdfRes.statusText || "Failed to generate application profile PDF");
+      }
+      const pdfBlob = await pdfRes.blob();
+      zip.file("application_profile.pdf", pdfBlob);
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "LaunchNYC_Application_Package.zip";
+      a.click();
+      URL.revokeObjectURL(url);
+      setSaveMessage({ type: "success", text: "Download started." });
+      setTimeout(() => setSaveMessage(null), 2000);
+    } catch (err) {
+      console.error("[Documents] handleDownloadDocumentPackage: exception", err);
+      setSaveMessage({ type: "error", text: err?.message || "Failed to create package." });
+    } finally {
+      setDownloadPackageLoading(false);
+    }
+  }
+
   async function saveAllProfile(overrides = null) {
     if (isGuest) {
       openSignUpModal();
@@ -458,47 +538,137 @@ export default function DocumentsPage() {
     }
   }
 
+  function sanitizeFileName(name) {
+    return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200) || "file";
+  }
+
   async function handleDocumentUpload(key, file) {
-    if (!file || !file.name?.toLowerCase().endsWith(".pdf") || !user?.id) return;
-    const pathCol = DOCUMENT_PATH_COLUMNS[key];
-    const storagePath = `${user.id}/${key}.pdf`;
+    if (!file || !user?.id) {
+      console.warn("[Documents] handleDocumentUpload skipped: missing file or user", { hasFile: !!file, userId: user?.id });
+      return;
+    }
+    const isPdf = file.type === "application/pdf" || file.name?.toLowerCase().endsWith(".pdf");
+    const isImage = (file.type || "").startsWith("image/");
+    if (!isPdf && !isImage) return;
+    const safeName = sanitizeFileName(file.name) || (isPdf ? "document.pdf" : "image");
+    const storagePath = `${user.id}/${key}_${Date.now()}_${safeName}`;
     setUploadingKey(key);
     try {
+      console.log("[Documents] handleDocumentUpload: about to upload", {
+        bucketName: BUCKET_NAME,
+        storagePath,
+        userId: user.id,
+        documentType: key,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+      });
       const { error: uploadError } = await supabase.storage
         .from(BUCKET_NAME)
-        .upload(storagePath, file, { upsert: true, contentType: "application/pdf" });
-      if (uploadError) throw uploadError;
-      const { data: updated } = await supabase
-        .from("renter_profiles")
-        .update({ [pathCol]: storagePath })
-        .eq("user_id", user.id)
-        .select();
-      if (!updated?.length) {
-        await supabase
-          .from("renter_profiles")
-          .upsert({ user_id: user.id, [pathCol]: storagePath }, { onConflict: "user_id" });
+        .upload(storagePath, file, { upsert: true, contentType: file.type || (isPdf ? "application/pdf" : "image/jpeg") });
+      if (uploadError) {
+        console.error("[Documents] Storage upload error (before throw)", {
+          message: uploadError.message,
+          statusCode: uploadError.statusCode,
+          error: uploadError.error,
+          name: uploadError.name,
+          full: uploadError,
+        });
+        throw uploadError;
       }
-      setChecklist((prev) => ({ ...prev, [key]: true }));
-      setFileNames((prev) => ({ ...prev, [key]: file.name }));
+      const { data: urlData } = supabase.storage.from(BUCKET_NAME).getPublicUrl(storagePath);
+      const fileUrl = urlData?.publicUrl ?? "";
+      await supabase
+        .from("document_files")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("document_type", key);
+      const { data: row, error: insertError } = await supabase
+        .from("document_files")
+        .insert({ user_id: user.id, document_type: key, file_url: fileUrl, filename: file.name })
+        .select("id, file_url, filename")
+        .single();
+      if (insertError) {
+        console.error("[Documents] document_files insert error", {
+          message: insertError.message,
+          code: insertError.code,
+          details: insertError.details,
+          full: insertError,
+        });
+        throw insertError;
+      }
+      setDocumentFilesByKey((prev) => ({ ...prev, [key]: { id: row.id, file_url: row.file_url, filename: row.filename } }));
+      await toggleChecklistItem(key, true);
     } catch (err) {
-      console.error("[Documents] Upload failed:", err);
+      console.error("[Documents] Upload failed:", {
+        message: err?.message,
+        statusCode: err?.statusCode,
+        error: err?.error,
+        code: err?.code,
+        name: err?.name,
+        details: err?.details,
+        full: err,
+      });
     } finally {
       setUploadingKey(null);
     }
   }
 
-  async function clearDocument(key) {
-    if (!user?.id) return;
-    const pathCol = DOCUMENT_PATH_COLUMNS[key];
+  function getStoragePathFromPublicUrl(fileUrl) {
+    if (!fileUrl || typeof fileUrl !== "string") return null;
+    const match = fileUrl.match(/\/storage\/v1\/object\/public\/[^/]+\/(.+)$/);
+    return match ? match[1] : null;
+  }
+
+  async function handleRemoveDocument(key) {
+    const entry = documentFilesByKey[key];
+    if (!entry || !user?.id) return;
+    setRemovingKey(key);
     try {
-      await supabase
-        .from("renter_profiles")
-        .update({ [pathCol]: null })
-        .eq("user_id", user.id);
-      setChecklist((prev) => ({ ...prev, [key]: false }));
-      setFileNames((prev) => ({ ...prev, [key]: undefined }));
+      const storagePath = getStoragePathFromPublicUrl(entry.file_url);
+      if (storagePath) {
+        const { error: removeError } = await supabase.storage.from(BUCKET_NAME).remove([storagePath]);
+        if (removeError) {
+          console.error("[Documents] Storage remove failed:", removeError);
+          setRemovingKey(null);
+          return;
+        }
+      } else {
+        const { data: list } = await supabase.storage.from(BUCKET_NAME).list(user.id);
+        if (Array.isArray(list)) {
+          const toRemove = list.filter((f) => f.name?.startsWith(`${key}_`)).map((f) => `${user.id}/${f.name}`);
+          if (toRemove.length > 0) {
+            const { error: removeError } = await supabase.storage.from(BUCKET_NAME).remove(toRemove);
+            if (removeError) {
+              console.error("[Documents] Storage remove (list fallback) failed:", removeError);
+              setRemovingKey(null);
+              return;
+            }
+          }
+        }
+      }
+
+      const { error: deleteError } = await supabase
+        .from("document_files")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("document_type", key);
+      if (deleteError) {
+        console.error("[Documents] document_files delete failed:", deleteError);
+        setRemovingKey(null);
+        return;
+      }
+
+      setDocumentFilesByKey((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      await toggleChecklistItem(key, false);
     } catch (err) {
-      console.error("[Documents] clearDocument failed:", err);
+      console.error("[Documents] Remove document failed:", err);
+    } finally {
+      setRemovingKey(null);
     }
   }
 
@@ -1286,17 +1456,6 @@ export default function DocumentsPage() {
 
               {activeTab === "documents" && (
                 <>
-                  <div className="flex flex-wrap items-center gap-2 rounded-lg bg-[#001f3f] px-4 py-3 text-white">
-                    <span className="text-sm">
-                      ⚡ Pro members can upload and store documents, then export everything as one professional PDF package.
-                    </span>
-                    <Link
-                      href="/account#billing"
-                      className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[#001f3f] hover:opacity-90 whitespace-nowrap no-underline"
-                    >
-                      Upgrade to Pro →
-                    </Link>
-                  </div>
                   <div>
                     <h2 className="font-semibold text-[#001f3f] text-base">
                       Document Checklist
@@ -1306,36 +1465,88 @@ export default function DocumentsPage() {
                     </p>
                   </div>
                   <div className="mt-4 space-y-3">
-                    {CHECKLIST_ITEMS.map(({ key, label, helperText }) => (
-                      <div
-                        key={key}
-                        className="flex items-center gap-3 rounded-xl border border-[#e8ecf2] bg-[#f4f6f9]/50 px-4 py-3.5"
-                      >
-                        <button
-                          type="button"
-                          onClick={guard(() => toggleChecklistItem(key, !checklist[key]))}
-                          className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-[#001f3f] focus:ring-offset-2"
-                          aria-checked={!!checklist[key]}
-                          role="checkbox"
+                    {CHECKLIST_ITEMS.map(({ key, label, helperText }) => {
+                      const uploaded = documentFilesByKey[key];
+                      const isUploading = uploadingKey === key;
+                      const isRemoving = removingKey === key;
+                      return (
+                        <div
+                          key={key}
+                          className="flex flex-wrap items-center gap-3 rounded-xl border border-[#e8ecf2] bg-[#f4f6f9]/50 px-4 py-3.5"
                         >
-                          {checklist[key] ? (
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#16a34a]">
-                              <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                          <button
+                            type="button"
+                            onClick={guard(() => toggleChecklistItem(key, !checklist[key]))}
+                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-[#001f3f] focus:ring-offset-2"
+                            aria-checked={!!checklist[key]}
+                            role="checkbox"
+                          >
+                            {checklist[key] ? (
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#16a34a]">
+                                <svg className="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                              </span>
+                            ) : (
+                              <span className="h-5 w-5 rounded-full border-2 border-[#d1d5db] bg-white" />
+                            )}
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <span className={`text-sm font-medium ${checklist[key] ? "text-[#9ca3af] line-through" : "text-[#0f1826]"}`}>
+                              {label}
                             </span>
-                          ) : (
-                            <span className="h-5 w-5 rounded-full border-2 border-[#d1d5db] bg-white" />
-                          )}
-                        </button>
-                        <div className="min-w-0 flex-1">
-                          <span className={`text-sm font-medium ${checklist[key] ? "text-[#9ca3af] line-through" : "text-[#0f1826]"}`}>
-                            {label}
-                          </span>
-                          <p className="mt-0.5 text-xs text-[#6b7a8d]">
-                            {helperText}
-                          </p>
+                            <p className="mt-0.5 text-xs text-[#6b7a8d]">
+                              {helperText}
+                            </p>
+                            {uploaded && (
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className="inline-flex items-center gap-1.5 text-xs text-[#0f1826]">
+                                  <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#16a34a] text-white" aria-hidden>
+                                    <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                                  </span>
+                                  <span className="truncate max-w-[180px]" title={uploaded.filename}>{uploaded.filename}</span>
+                                </span>
+                                <a
+                                  href={uploaded.file_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs font-medium text-[#001f3f] underline hover:no-underline"
+                                >
+                                  View
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={guard(() => handleRemoveDocument(key))}
+                                  disabled={isRemoving}
+                                  className="text-xs font-medium text-[#6b7280] hover:text-[#b91c1c] disabled:opacity-50"
+                                >
+                                  {isRemoving ? "Removing…" : "Remove"}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="file"
+                              accept={ACCEPT_UPLOAD}
+                              className="hidden"
+                              ref={(el) => { if (fileInputRefs.current) fileInputRefs.current[key] = el; }}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleDocumentUpload(key, f);
+                                e.target.value = "";
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={guard(() => fileInputRefs.current?.[key]?.click())}
+                              disabled={isUploading}
+                              className="rounded-lg border border-[#d1d5db] px-2.5 py-1.5 text-xs font-medium text-[#374151] hover:bg-[#f4f6f9] disabled:opacity-50"
+                            >
+                              {isUploading ? "Uploading…" : "Upload"}
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   <div className="mt-6 flex border-t border-[#e8ecf2] pt-6">
                     <button
@@ -1418,6 +1629,27 @@ export default function DocumentsPage() {
                   "Export Application Package"
                 )}
               </button>
+              {Object.keys(documentFilesByKey).length === 0 ? (
+                <p className="mt-2 text-xs text-[#6b7a8d]">
+                  Upload documents above to enable this
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={guard(handleDownloadDocumentPackage)}
+                  disabled={downloadPackageLoading}
+                  className="mt-3 w-full rounded-lg border-2 border-[#001f3f] bg-white px-4 py-3 text-sm font-semibold text-[#001f3f] hover:bg-[#f4f6f9] disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                >
+                  {downloadPackageLoading ? (
+                    <>
+                      <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#001f3f] border-t-transparent" aria-hidden />
+                      Creating zip…
+                    </>
+                  ) : (
+                    "Download Document Package"
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>

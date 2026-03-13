@@ -140,13 +140,10 @@ export default function AIPage() {
     [isGuest, openSignUpModal]
   );
 
-  const userMessageCount = messages.filter((m) => m.role === "user").length;
-  const showPaywall = userMessageCount >= 3;
-
   async function handleSubmit(e) {
     e.preventDefault();
     const trimmed = input.trim();
-    if (!trimmed || loading || showPaywall) return;
+    if (!trimmed || loading) return;
 
     const userMsg = { id: `user-${Date.now()}`, role: "user", text: trimmed };
     setMessages((prev) => [...prev, userMsg]);
@@ -401,21 +398,6 @@ export default function AIPage() {
           </div>
         </header>
 
-        {showPaywall && (
-          <div className="flex items-center justify-between gap-4 border-b border-amber-200 bg-amber-50 px-6 py-3 text-sm text-amber-900">
-            <span>
-              You&apos;ve used your 3 free messages. Upgrade to Pro for unlimited
-              AI advice.
-            </span>
-            <Link
-              href="/account#billing"
-              className="rounded-lg bg-[#001f3f] px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 no-underline"
-            >
-              Upgrade to Pro
-            </Link>
-          </div>
-        )}
-
         <div className="flex-1 overflow-y-auto px-6 py-5">
           <div className="mx-auto max-w-2xl space-y-5">
             {!messagesLoaded ? (
@@ -473,12 +455,12 @@ export default function AIPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask anything about your search..."
-              disabled={loading || showPaywall}
+              disabled={loading}
               className="flex-1 rounded-lg border border-[#dde2ea] bg-[#f4f6f9] px-4 py-3 text-sm text-[#0f1826] placeholder:text-[#a4b0be] focus:border-[#001f3f] focus:bg-white focus:outline-none disabled:opacity-60"
             />
             <button
               type="submit"
-              disabled={loading || showPaywall || !input.trim()}
+              disabled={loading || !input.trim()}
               className="rounded-lg bg-[#001f3f] px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               Send

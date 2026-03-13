@@ -11,16 +11,20 @@ const TASK_HREF = {
   "first-apt": "/board",
   "search-profile": "/",
   "move-in": "/",
+  "set-budget": "/",
+  "choose-neighborhoods": "/",
   "five-apt": "/board",
   "research-hood": "/neighborhoods",
-  "renter-start": "/documents",
-  "guarantor": "/documents",
   "renter-complete": "/documents",
   "compile-docs": "/documents?tab=5",
+  "export-pro": "/documents",
   "first-tour": "/board",
   "tour-3": "/board",
   "first-apply": "/board",
+  "send-package-pro": "/documents",
   "sign-lease": "/board",
+  "insurance": "/board",
+  "get-keys": "/board",
 };
 
 const DOCUMENT_CHECKLIST_KEYS = [
@@ -114,6 +118,8 @@ export default function TimelinePage() {
   const hasBudgetAndNeighborhoods =
     userProfile?.budget_max != null ||
     (Array.isArray(userProfile?.neighborhoods) && userProfile.neighborhoods.length > 0);
+  const hasBudget = userProfile?.budget_max != null;
+  const hasNeighborhoods = Array.isArray(userProfile?.neighborhoods) && userProfile.neighborhoods.length > 0;
   // Only treat move_in_date as set when it's a real value (not null/undefined/empty)
   const moveInDateRaw = userProfile?.move_in_date;
   const hasMoveInDate =
@@ -129,35 +135,32 @@ export default function TimelinePage() {
 
   const tasks = [
     { phase: 1, phaseLabel: "Set Up Your Search", weekRange: "8+ weeks out", tasks: [
-      { id: "account", title: "Create your account", done: true },
-      { id: "search-profile", title: "Complete your search profile", done: hasBudgetAndNeighborhoods },
       { id: "move-in", title: "Set your move-in date", done: hasMoveInDate },
-      { id: "first-apt", title: "Save your first apartment", done: apartments.length >= 1 },
+      { id: "set-budget", title: "Set budget", done: hasBudget },
+      { id: "choose-neighborhoods", title: "Choose neighborhoods", done: hasNeighborhoods },
     ]},
     { phase: 2, phaseLabel: "Build Your List", weekRange: "6–8 weeks out", tasks: [
+      { id: "first-apt", title: "Save your first apartment", done: apartments.length >= 1 },
       { id: "five-apt", title: "Save at least 5 apartments", done: apartments.length >= 5 },
       { id: "research-hood", title: "Research your target neighborhoods", done: hasBudgetAndNeighborhoods },
-      { id: "renter-start", title: "Start your renter profile", done: hasRenterStart },
-      { id: "guarantor", title: "Loop in your guarantor", done: hasGuarantor },
     ]},
     { phase: 3, phaseLabel: "Get Document Ready", weekRange: "4–6 weeks out", tasks: [
       { id: "renter-complete", title: "Complete your renter profile", done: renterCompletePct >= 80 },
-      { id: "compile-docs", title: "Compile your documents", subtitle: "Check off each document in your War Chest once you have it ready.", done: docChecklistAllDone },
-      { id: "export-pro", title: "Export your application package", locked: true, subtitle: "Export a professional PDF package brokers love. Pro feature.", upgradeLabel: "Upgrade to Pro →" },
+      { id: "compile-docs", title: "Check off documents", subtitle: "Check off each document in your War Chest once you have it ready.", done: docChecklistAllDone },
+      { id: "export-pro", title: "Export your application package", subtitle: "Export a professional PDF package brokers love." },
     ]},
     { phase: 4, phaseLabel: "Start Touring", weekRange: "3–4 weeks out", tasks: [
       { id: "first-tour", title: "Book your first tour", done: hasTouringOrLater },
       { id: "tour-3", title: "Tour at least 3 apartments", done: hasTouring3OrLater },
-      { id: "pro-banner", banner: true, text: "Pro members close faster. Export your package and be the first complete application a broker sees. Upgrade to Pro →" },
     ]},
     { phase: 5, phaseLabel: "Apply", weekRange: "1–3 weeks out", tasks: [
       { id: "first-apply", title: "Submit your first application", done: hasApplyingOrLater },
-      { id: "send-package-pro", title: "Send your LaunchNYC application package", locked: true, subtitle: "Stand out with a professional single-file application. Pro feature.", upgradeLabel: "Upgrade to Pro →" },
+      { id: "send-package-pro", title: "Send your LaunchNYC application package", subtitle: "Stand out with a professional single-file application." },
     ]},
     { phase: 6, phaseLabel: "Sign & Move In", weekRange: "0–1 weeks out", tasks: [
-      { id: "review-lease", title: "Review your lease carefully", subtitle: "Check lease term, early termination, subletting, and what's included." },
       { id: "sign-lease", title: "Sign your lease", done: hasSigned },
       { id: "insurance", title: "Set up renters insurance", subtitle: "Required by most NYC leases" },
+      { id: "get-keys", title: "Get keys" },
     ]},
   ];
 
@@ -182,6 +185,15 @@ export default function TimelinePage() {
     (applyingCount >= 1 ? 20 : 0) +
     (signedCount >= 1 ? 20 : 0);
   const mainFillPct = signedCount >= 1 ? 100 : (progressMilestones.slice(0, 4).filter(Boolean).length / 4) * 95;
+
+  const progressCaption =
+    progressRealPct < 40
+      ? null
+      : progressRealPct < 80
+        ? "Keep going — you're making progress!"
+        : progressRealPct < 100
+          ? "Almost there — sign your lease!"
+          : "You did it! 🎉";
 
   const getPhaseForWeeks = (w) => {
     if (w == null) return null;
@@ -441,14 +453,14 @@ export default function TimelinePage() {
           </div>
           <div className="timeline-progress-track">
             <div className="timeline-progress-fill" style={{ width: `${mainFillPct}%` }} />
-            {signedCount < 1 && (
+            {progressRealPct >= 80 && progressRealPct < 100 && (
               <div className="timeline-progress-final-segment" aria-hidden>
                 <span className="timeline-progress-final-label">Almost there — sign your lease!</span>
               </div>
             )}
           </div>
-          {signedCount < 1 && (
-            <p className="timeline-progress-caption timeline-progress-caption-final">Almost there — sign your lease!</p>
+          {progressCaption && (
+            <p className="timeline-progress-caption timeline-progress-caption-final">{progressCaption}</p>
           )}
           <p className="timeline-progress-caption">{milestonesDone} of 5 milestones</p>
         </div>
@@ -525,7 +537,6 @@ export default function TimelinePage() {
                   return (
                     <div key={task.id || "banner"} className="timeline-drawer-task timeline-drawer-banner">
                       <p>{task.text}</p>
-                      <Link href="/account#billing" className="timeline-upgrade-btn">Upgrade to Pro →</Link>
                     </div>
                   );
                 }
@@ -550,9 +561,6 @@ export default function TimelinePage() {
                     <div className="timeline-drawer-task-body">
                       <div className="timeline-drawer-task-title">{task.title}</div>
                       {task.subtitle && <p className="timeline-drawer-task-subtitle">{task.subtitle}</p>}
-                      {task.locked && task.upgradeLabel && (
-                        <Link href="/account#billing" className="timeline-upgrade-btn">{task.upgradeLabel}</Link>
-                      )}
                     </div>
                     {!task.done && !task.locked && href && <span className="timeline-drawer-task-arrow">→</span>}
                   </>

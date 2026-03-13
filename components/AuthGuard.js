@@ -84,7 +84,7 @@ export default function AuthGuard({ children }) {
   }
 
   return (
-    <AuthProvider user={session?.user ?? null} isGuest={isGuest}>
+    <AuthProvider user={session?.user ?? null} isGuest={isGuest} pathname={pathname}>
       {/* Mobile top bar: hamburger + logo (only below 768px) */}
       {!isDesktop && (
         <header className="fixed left-0 right-0 top-0 z-40 flex h-14 items-center gap-3 bg-[#001f3f] px-4">

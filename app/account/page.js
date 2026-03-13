@@ -194,48 +194,8 @@ export default function AccountPage() {
         <h1 className="text-2xl font-semibold text-[#001f3f]">My Account</h1>
         <p className="mt-1 text-sm text-[#6b7280]">{user?.email ?? ""}</p>
 
-        {/* Plan & Billing */}
-        <section className={`mt-8 ${cardClass}`}>
-          <h2 className="text-base font-semibold text-[#001f3f]">Plan & Billing</h2>
-          <p className="mt-2 text-sm text-[#6b7280]">Current plan</p>
-          <p className="mt-0.5 text-lg font-medium text-[#001f3f]">Free Plan</p>
-          <ul className="mt-4 space-y-1.5 text-sm text-[#374151]">
-            <li className="flex items-center gap-2">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" aria-hidden />
-              Board
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" aria-hidden />
-              Documents
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" aria-hidden />
-              Timeline (Search HQ)
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#22c55e]" aria-hidden />
-              3 AI advisor messages per month
-            </li>
-          </ul>
-          <button
-            type="button"
-            className="mt-6 rounded-lg bg-[#001f3f] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
-          >
-            Upgrade to Pro
-          </button>
-          <div className="mt-6 border-t border-[#e5e7eb] pt-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-[#6b7280]">Pro includes</p>
-            <ul className="mt-2 space-y-1.5 text-sm text-[#374151]">
-              <li><strong>Unlimited AI Advisor</strong> — get real-time advice tailored to your exact search</li>
-              <li><strong>Daily Listing Alerts</strong> — new apartments matching your criteria sent every morning</li>
-              <li><strong>Unlimited Application Package Exports</strong> — generate and send your full renter package instantly</li>
-              <li><strong>Priority Support</strong> — get help when it matters most</li>
-            </ul>
-          </div>
-        </section>
-
         {/* My Search Profile */}
-        <section className={`mt-6 ${cardClass}`}>
+        <section className={`mt-8 ${cardClass}`}>
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-[#001f3f]">My Search Profile</h2>
             {hasProfile && !editing && (

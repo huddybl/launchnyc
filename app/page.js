@@ -249,8 +249,6 @@ export default function MySearchPage() {
     );
   }
 
-  const accountTier = profile?.tier === "pro" ? "pro" : "free";
-
   return (
     <div className="min-h-screen bg-[#f4f6f9] px-6 py-8">
       <div className="mx-auto max-w-2xl space-y-6">
@@ -263,30 +261,6 @@ export default function MySearchPage() {
           <p className="mt-2 text-sm text-zinc-600">
             {user?.email ?? "—"}
           </p>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <span
-              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
-                accountTier === "pro"
-                  ? "bg-amber-400/30 text-[#001f3f] border border-amber-500/50"
-                  : "bg-zinc-100 text-zinc-600 border border-zinc-200"
-              }`}
-            >
-              {accountTier === "pro" ? "Pro" : "Free Plan"}
-            </span>
-            {accountTier === "free" && (
-              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-                <Link
-                  href="/account#billing"
-                  className="rounded-lg bg-[#001f3f] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 no-underline"
-                >
-                  Upgrade to Pro →
-                </Link>
-                <span className="text-xs text-zinc-500">
-                  Unlock unlimited AI, daily listing alerts, and PDF exports
-                </span>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Your Roommates card — always visible for logged-in users so it never fails silently */}
