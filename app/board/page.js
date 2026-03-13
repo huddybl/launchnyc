@@ -134,6 +134,7 @@ export default function BoardPage() {
   const [filterPriceMin, setFilterPriceMin] = useState("");
   const [filterPriceMax, setFilterPriceMax] = useState("");
   const [moveInDate, setMoveInDate] = useState(null);
+  const [boardMode, setBoardMode] = useState("personal");
   const [userGroup, setUserGroup] = useState(null);
   const [pendingInvite, setPendingInvite] = useState(null);
   const [inviteActionLoading, setInviteActionLoading] = useState(false);
@@ -163,6 +164,12 @@ export default function BoardPage() {
   useEffect(() => {
     fetchUserGroup();
   }, [fetchUserGroup]);
+
+  useEffect(() => {
+    if (!userGroup?.id && boardMode === "group") {
+      setBoardMode("personal");
+    }
+  }, [userGroup?.id, boardMode]);
 
   const fetchPendingInvite = useCallback(async () => {
     if (!user?.id || !user?.email || isGuest) {
@@ -291,10 +298,10 @@ export default function BoardPage() {
         .from("apartments")
         .select("*")
         .order("created_at", { ascending: false });
-      if (userGroup?.id) {
+      if (boardMode === "group" && userGroup?.id) {
         q.eq("group_id", userGroup.id);
       } else {
-        q.eq("user_id", user.id);
+        q.eq("user_id", user.id).is("group_id", null);
       }
       const { data, error: err } = await q;
       if (err) {
@@ -309,7 +316,7 @@ export default function BoardPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, userGroup?.id]);
+  }, [user?.id, userGroup?.id, boardMode]);
 
   useEffect(() => {
     // #region agent log
@@ -725,7 +732,11 @@ export default function BoardPage() {
       listing_url: addForm.listing_url.trim() || null,
       notes: addForm.notes.trim() || null,
     };
-    if (userGroup?.id) payload.group_id = userGroup.id;
+    if (boardMode === "group" && userGroup?.id) {
+      payload.group_id = userGroup.id;
+    } else {
+      payload.group_id = null;
+    }
     try {
       const { error: err } = await supabase.from("apartments").insert(payload);
       if (err) {
@@ -805,6 +816,38 @@ export default function BoardPage() {
           </div>
         </div>
         <div className="topbar-right">
+          <div className="board-mode-pills" role="tablist" aria-label="Board mode">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={boardMode === "personal"}
+              className={`board-mode-pill ${boardMode === "personal" ? "active" : ""}`}
+              onClick={() => {
+                if (boardMode !== "personal") {
+                  setApartments([]);
+                  setBoardMode("personal");
+                }
+              }}
+            >
+              My Search
+            </button>
+            {userGroup?.id && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={boardMode === "group"}
+                className={`board-mode-pill ${boardMode === "group" ? "active" : ""}`}
+                onClick={() => {
+                  if (boardMode !== "group") {
+                    setApartments([]);
+                    setBoardMode("group");
+                  }
+                }}
+              >
+                Group: {userGroup.name || "Unnamed"}
+              </button>
+            )}
+          </div>
           {moveInDate != null ? (
             (() => {
               const weeks = weeksToMoveIn(moveInDate);

@@ -184,6 +184,36 @@
   gap: 10px;
   margin-left: auto;
 }
+.board-page .board-mode-pills {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  border: 2px solid var(--navy);
+  padding: 2px;
+  background: white;
+}
+.board-page .board-mode-pill {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  background: transparent;
+  color: var(--navy);
+}
+.board-page .board-mode-pill:hover {
+  background: #f0f4f8;
+}
+.board-page .board-mode-pill.active {
+  background: var(--navy);
+  color: white;
+}
+.board-page .board-mode-pill.active:hover {
+  opacity: 0.95;
+}
 .board-page .weeks-pill {
   font-size: 12px;
   font-weight: 600;
