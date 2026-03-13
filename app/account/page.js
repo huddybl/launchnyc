@@ -56,6 +56,7 @@ export default function AccountPage() {
   const [groupInvites, setGroupInvites] = useState([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteSuccess, setInviteSuccess] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!user?.id || isGuest) return;
@@ -164,28 +165,33 @@ export default function AccountPage() {
     e.preventDefault();
     if (!myGroup?.id || !user?.id || !inviteEmail.trim()) return;
     setGroupError(null);
+    setInviteSuccess(false);
     setSendingInvite(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      const body = {
+        invited_email: inviteEmail.trim(),
+        group_id: myGroup.id,
+        group_name: myGroup.name ?? "Unnamed group",
+        inviter_email: user.email ?? "",
+      };
+      console.log("[Send Invite] calling POST /api/invite", body);
       const res = await fetch("/api/invite", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session?.access_token ?? ""}`,
         },
-        body: JSON.stringify({
-          invited_email: inviteEmail.trim(),
-          group_id: myGroup.id,
-          group_name: myGroup.name ?? "Unnamed group",
-          inviter_email: user.email ?? "",
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
+      console.log("[Send Invite] response", res.status, data);
       if (!res.ok) {
         setGroupError(data?.error ?? "Failed to send invite");
         return;
       }
       setInviteEmail("");
+      setInviteSuccess(true);
       await fetchMyGroup();
     } finally {
       setSendingInvite(false);
@@ -763,7 +769,7 @@ export default function AccountPage() {
                   <input
                     type="email"
                     value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
+                    onChange={(e) => { setInviteEmail(e.target.value); setInviteSuccess(false); setGroupError(null); }}
                     placeholder="roommate@email.com"
                     className="rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm text-[#001f3f] placeholder-[#9ca3af] focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
                   />
@@ -775,6 +781,12 @@ export default function AccountPage() {
                     {sendingInvite ? "Sending…" : "Send Invite"}
                   </button>
                 </form>
+                {inviteSuccess && (
+                  <p className="mt-2 text-sm font-medium text-green-600">Invite sent!</p>
+                )}
+                {groupError && (
+                  <p className="mt-2 text-sm text-red-600">{groupError}</p>
+                )}
               </div>
 
               {groupInvites.length > 0 && (

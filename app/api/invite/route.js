@@ -1,8 +1,27 @@
+import "dotenv/config";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
+);
+
+// "permission denied for table users" usually means: (1) RLS on group_members/group_invites
+// references auth.users and anon cannot read it, or (2) group_invites.invited_by FK to
+// auth.users(id) causes Postgres to check auth.users on INSERT and anon lacks SELECT.
+
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+function logSupabaseError(operation, err) {
+  console.error(`[invite] Supabase error in operation: ${operation}`, {
+    message: err?.message,
+    code: err?.code,
+    details: err?.details,
+    full: err,
+  });
+}
 
 async function getSupabaseAndUser(request) {
   const authHeader = request.headers.get("Authorization");
@@ -13,8 +32,17 @@ async function getSupabaseAndUser(request) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
     { global: { headers: { Authorization: `Bearer ${token}` } } }
   );
-  const { data: { user } } = await supabase.auth.getUser(token);
-  return { supabase, user };
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error) {
+      logSupabaseError("auth.getUser", error);
+      return { supabase: null, user: null };
+    }
+    return { supabase, user };
+  } catch (err) {
+    logSupabaseError("auth.getUser (throw)", err);
+    return { supabase: null, user: null };
+  }
 }
 
 export async function POST(request) {
@@ -40,30 +68,47 @@ export async function POST(request) {
     return NextResponse.json({ error: "group_id is required" }, { status: 400 });
   }
 
-  const { data: membership } = await supabase
-    .from("group_members")
-    .select("group_id")
-    .eq("group_id", groupId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  let membership;
+  try {
+    const result = await supabase
+      .from("group_members")
+      .select("group_id")
+      .eq("group_id", groupId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (result.error) {
+      logSupabaseError("group_members select", result.error);
+      return NextResponse.json({ error: result.error.message }, { status: 500 });
+    }
+    membership = result.data;
+  } catch (err) {
+    logSupabaseError("group_members select (throw)", err);
+    return NextResponse.json({ error: err?.message ?? "group_members failed" }, { status: 500 });
+  }
   if (!membership) {
     return NextResponse.json({ error: "You are not a member of this group" }, { status: 403 });
   }
 
-  const { data: invite, error: insertError } = await supabase
-    .from("group_invites")
-    .insert({
-      group_id: groupId,
-      invited_email: invitedEmail,
-      invited_by: user.id,
-      inviter_email: inviterEmail || null,
-      status: "pending",
-    })
-    .select("id")
-    .single();
-
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  let invite;
+  try {
+    const insertResult = await supabaseAdmin
+      .from("group_invites")
+      .insert({
+        group_id: groupId,
+        invited_email: invitedEmail,
+        invited_by: user.id,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+    if (insertResult.error) {
+      logSupabaseError("group_invites insert", insertResult.error);
+      return NextResponse.json({ error: insertResult.error.message }, { status: 500 });
+    }
+    invite = insertResult.data;
+  } catch (err) {
+    logSupabaseError("group_invites insert (throw)", err);
+    return NextResponse.json({ error: err?.message ?? "group_invites insert failed" }, { status: 500 });
   }
 
   const joinUrl = `https://launchnyc.vercel.app/join/${invite.id}`;
@@ -101,16 +146,22 @@ export async function POST(request) {
 </html>
 `.trim();
 
-  if (process.env.RESEND_API_KEY) {
-    const { error: emailError } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL ?? "LaunchNYC <onboarding@resend.dev>",
-      to: invitedEmail,
-      subject,
-      html,
-    });
-    if (emailError) {
-      console.warn("[invite] Resend error:", emailError);
-    }
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "LaunchNYC <onboarding@resend.dev>";
+  console.log("[Resend] sending email:", {
+    from: fromEmail,
+    to: invitedEmail,
+    subject,
+  });
+  const { data, error } = await resend.emails.send({
+    from: fromEmail,
+    to: invitedEmail,
+    subject,
+    html,
+  });
+  console.log("[Resend] response data:", JSON.stringify(data));
+  console.log("[Resend] response error:", JSON.stringify(error));
+  if (error) {
+    console.warn("[invite] Resend error:", error);
   }
 
   return NextResponse.json({ id: invite.id });
