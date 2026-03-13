@@ -72,6 +72,78 @@
   opacity: 0.9;
 }
 
+.board-page .board-joined-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--green-bg);
+  color: var(--green);
+  padding: 10px 24px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+.board-page .board-joined-banner button {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.8;
+  padding: 0 4px;
+}
+.board-page .board-joined-banner button:hover {
+  opacity: 1;
+}
+
+.board-page .board-invite-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--navy);
+  color: var(--white);
+  padding: 12px 24px;
+}
+.board-page .board-invite-banner-text {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+.board-page .board-invite-banner-actions {
+  display: flex;
+  gap: 8px;
+}
+.board-page .board-invite-banner-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.board-page .board-invite-banner-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.board-page .board-invite-banner-accept {
+  background: var(--white);
+  color: var(--navy);
+  border: none;
+}
+.board-page .board-invite-banner-accept:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.board-page .board-invite-banner-decline {
+  background: transparent;
+  color: var(--white);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+.board-page .board-invite-banner-decline:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 /* ----- Page header ----- */
 .board-page .topbar {
   background: var(--white);

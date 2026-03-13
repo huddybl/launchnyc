@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import GuestPreviewBanner from "@/components/GuestPreviewBanner";
@@ -91,8 +92,10 @@ function Card({ apartment, onOpen, onDragStart, onDragEnd }) {
 }
 
 export default function BoardPage() {
+  const searchParams = useSearchParams();
   const { user, isGuest, openSignUpModal, showWelcome, handleDismissWelcome } = useAuth();
   const renderCountRef = useRef(0);
+  const [joinedMessage, setJoinedMessage] = useState(false);
   renderCountRef.current += 1;
   const [apartments, setApartments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -131,6 +134,118 @@ export default function BoardPage() {
   const [filterPriceMin, setFilterPriceMin] = useState("");
   const [filterPriceMax, setFilterPriceMax] = useState("");
   const [moveInDate, setMoveInDate] = useState(null);
+  const [userGroup, setUserGroup] = useState(null);
+  const [pendingInvite, setPendingInvite] = useState(null);
+  const [inviteActionLoading, setInviteActionLoading] = useState(false);
+
+  const fetchUserGroup = useCallback(async () => {
+    if (!user?.id) {
+      setUserGroup(null);
+      return;
+    }
+    const { data: membership } = await supabase
+      .from("group_members")
+      .select("group_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!membership?.group_id) {
+      setUserGroup(null);
+      return;
+    }
+    const { data: group } = await supabase
+      .from("search_groups")
+      .select("id, name, invite_code")
+      .eq("id", membership.group_id)
+      .single();
+    setUserGroup(group ?? null);
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchUserGroup();
+  }, [fetchUserGroup]);
+
+  const fetchPendingInvite = useCallback(async () => {
+    if (!user?.id || !user?.email || isGuest) {
+      setPendingInvite(null);
+      return;
+    }
+    const email = String(user.email).trim().toLowerCase();
+    if (!email) {
+      setPendingInvite(null);
+      return;
+    }
+    const { data: invites } = await supabase
+      .from("group_invites")
+      .select("id, group_id, inviter_email")
+      .eq("invited_email", email)
+      .eq("status", "pending")
+      .limit(1);
+    const inv = invites?.[0];
+    if (!inv) {
+      setPendingInvite(null);
+      return;
+    }
+    const { data: group } = await supabase
+      .from("search_groups")
+      .select("name")
+      .eq("id", inv.group_id)
+      .single();
+    setPendingInvite({
+      id: inv.id,
+      group_id: inv.group_id,
+      group_name: group?.name ?? "a group",
+      inviter_email: inv.inviter_email || "A group member",
+    });
+  }, [user?.id, user?.email, isGuest]);
+
+  useEffect(() => {
+    fetchPendingInvite();
+  }, [fetchPendingInvite]);
+
+  async function handleAcceptInvite() {
+    if (!pendingInvite?.id || !user?.id || !pendingInvite.group_id) return;
+    setInviteActionLoading(true);
+    try {
+      const { error: memberError } = await supabase
+        .from("group_members")
+        .insert({ group_id: pendingInvite.group_id, user_id: user.id });
+      if (memberError) {
+        setError(memberError.message);
+        setInviteActionLoading(false);
+        return;
+      }
+      await supabase
+        .from("group_invites")
+        .update({ status: "accepted" })
+        .eq("id", pendingInvite.id);
+      setPendingInvite(null);
+      await fetchUserGroup();
+      await fetchApartments();
+    } finally {
+      setInviteActionLoading(false);
+    }
+  }
+
+  async function handleDeclineInvite() {
+    if (!pendingInvite?.id) return;
+    setInviteActionLoading(true);
+    try {
+      await supabase
+        .from("group_invites")
+        .update({ status: "declined" })
+        .eq("id", pendingInvite.id);
+      setPendingInvite(null);
+    } finally {
+      setInviteActionLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (searchParams.get("joined") === "1") {
+      setJoinedMessage(true);
+      window.history.replaceState(null, "", "/board");
+    }
+  }, [searchParams]);
 
   const fetchMoveInDate = useCallback(async () => {
     if (!user?.id) {
@@ -172,11 +287,16 @@ export default function BoardPage() {
       return;
     }
     try {
-      const { data, error: err } = await supabase
+      const q = supabase
         .from("apartments")
         .select("*")
-        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
+      if (userGroup?.id) {
+        q.eq("group_id", userGroup.id);
+      } else {
+        q.eq("user_id", user.id);
+      }
+      const { data, error: err } = await q;
       if (err) {
         setError(err.message);
         setApartments([]);
@@ -189,7 +309,7 @@ export default function BoardPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, userGroup?.id]);
 
   useEffect(() => {
     // #region agent log
@@ -605,6 +725,7 @@ export default function BoardPage() {
       listing_url: addForm.listing_url.trim() || null,
       notes: addForm.notes.trim() || null,
     };
+    if (userGroup?.id) payload.group_id = userGroup.id;
     try {
       const { error: err } = await supabase.from("apartments").insert(payload);
       if (err) {
@@ -644,6 +765,37 @@ export default function BoardPage() {
         </div>
       )}
       {isGuest && <GuestPreviewBanner />}
+      {joinedMessage && (
+        <div className="board-joined-banner">
+          <p>You joined the group!</p>
+          <button type="button" onClick={() => setJoinedMessage(false)} aria-label="Dismiss">×</button>
+        </div>
+      )}
+      {pendingInvite && !isGuest && (
+        <div className="board-invite-banner">
+          <p className="board-invite-banner-text">
+            <strong>{pendingInvite.inviter_email}</strong> invited you to join <strong>{pendingInvite.group_name}</strong>
+          </p>
+          <div className="board-invite-banner-actions">
+            <button
+              type="button"
+              onClick={handleAcceptInvite}
+              disabled={inviteActionLoading}
+              className="board-invite-banner-btn board-invite-banner-accept"
+            >
+              Accept
+            </button>
+            <button
+              type="button"
+              onClick={handleDeclineInvite}
+              disabled={inviteActionLoading}
+              className="board-invite-banner-btn board-invite-banner-decline"
+            >
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
       {/* Topbar */}
       <div className="topbar">
         <div className="topbar-left">

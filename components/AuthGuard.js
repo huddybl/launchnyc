@@ -54,9 +54,9 @@ export default function AuthGuard({ children }) {
       return;
     }
     const allowed = !!session || isGuest;
-    // Not logged in and no guest flag: only /landing and /login are allowed. Redirect to /landing (never to /login or /board).
+    // Not logged in and no guest flag: only /landing, /login, and /join/* are allowed.
     if (!allowed) {
-      if (pathname !== "/landing" && pathname !== "/login") {
+      if (pathname !== "/landing" && pathname !== "/login" && !pathname.startsWith("/join/")) {
         router.replace("/landing");
         return;
       }
@@ -80,6 +80,9 @@ export default function AuthGuard({ children }) {
   }
 
   if (!session && !isGuest) {
+    if (pathname.startsWith("/join/")) {
+      return <div className="flex min-h-screen w-full min-w-0 flex-1">{children}</div>;
+    }
     return null;
   }
 

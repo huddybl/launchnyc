@@ -45,6 +45,41 @@ export default function LoginPage() {
           password,
         });
         if (error) throw error;
+        const { data: { session } } = await supabase.auth.getSession();
+        const pendingInviteId = typeof window !== "undefined" ? window.localStorage.getItem("pendingInviteId") : null;
+        const pendingCode = typeof window !== "undefined" ? window.localStorage.getItem("pendingInviteCode") : null;
+        if (pendingInviteId && session?.access_token) {
+          window.localStorage.removeItem("pendingInviteId");
+          const res = await fetch("/api/invite/accept", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ invite_id: pendingInviteId }),
+          });
+          if (res.ok) {
+            router.replace("/board?joined=1");
+            router.refresh();
+            return;
+          }
+        }
+        if (pendingCode && session?.access_token) {
+          window.localStorage.removeItem("pendingInviteCode");
+          const res = await fetch("/api/groups/join", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session?.access_token ?? ""}`,
+            },
+            body: JSON.stringify({ invite_code: pendingCode }),
+          });
+          if (res.ok) {
+            router.replace("/board?joined=1");
+            router.refresh();
+            return;
+          }
+        }
         router.replace("/");
         router.refresh();
       } else {
@@ -53,6 +88,41 @@ export default function LoginPage() {
           password,
         });
         if (error) throw error;
+        const { data: { session } } = await supabase.auth.getSession();
+        const pendingInviteId = typeof window !== "undefined" ? window.localStorage.getItem("pendingInviteId") : null;
+        const pendingCode = typeof window !== "undefined" ? window.localStorage.getItem("pendingInviteCode") : null;
+        if (pendingInviteId && session?.access_token) {
+          window.localStorage.removeItem("pendingInviteId");
+          const res = await fetch("/api/invite/accept", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ invite_id: pendingInviteId }),
+          });
+          if (res.ok) {
+            router.replace("/board?joined=1");
+            router.refresh();
+            return;
+          }
+        }
+        if (pendingCode && session?.access_token) {
+          window.localStorage.removeItem("pendingInviteCode");
+          const res = await fetch("/api/groups/join", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ invite_code: pendingCode }),
+          });
+          if (res.ok) {
+            router.replace("/board?joined=1");
+            router.refresh();
+            return;
+          }
+        }
         setMessage({
           type: "success",
           text: "Check your email to confirm your account, then log in.",

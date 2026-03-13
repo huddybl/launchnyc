@@ -38,9 +38,33 @@ export default function AccountPage() {
   const [roommatesEditing, setRoommatesEditing] = useState(false);
   const [roommatesForm, setRoommatesForm] = useState([""]);
   const [roommatesSaving, setRoommatesSaving] = useState(false);
+  const [myGroup, setMyGroup] = useState(null);
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [createGroupName, setCreateGroupName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [createGroupLoading, setCreateGroupLoading] = useState(false);
+  const [joinGroupLoading, setJoinGroupLoading] = useState(false);
+  const [showCreateInput, setShowCreateInput] = useState(false);
+  const [showJoinInput, setShowJoinInput] = useState(false);
+  const [groupError, setGroupError] = useState(null);
+  const [groupNameEditing, setGroupNameEditing] = useState(false);
+  const [groupNameEditValue, setGroupNameEditValue] = useState("");
+  const [copyLinkFeedback, setCopyLinkFeedback] = useState(false);
+  const [leaveGroupLoading, setLeaveGroupLoading] = useState(false);
+  const [removingUserId, setRemovingUserId] = useState(null);
+  const [groupNameSaving, setGroupNameSaving] = useState(false);
+  const [groupInvites, setGroupInvites] = useState([]);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [sendingInvite, setSendingInvite] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!user?.id || isGuest) return;
+    if (user.email) {
+      await supabase.from("user_profiles").upsert(
+        { user_id: user.id, email: user.email },
+        { onConflict: "user_id" }
+      );
+    }
     const [profileRes, aptRes] = await Promise.all([
       supabase.from("user_profiles").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("apartments").select("id, status").eq("user_id", user.id),
@@ -70,6 +94,234 @@ export default function AccountPage() {
       setRoommatesForm([""]);
     }
   }, [user?.id, isGuest]);
+
+  const fetchMyGroup = useCallback(async () => {
+    if (!user?.id || isGuest) {
+      setMyGroup(null);
+      setGroupMembers([]);
+      return;
+    }
+    const { data: membership } = await supabase
+      .from("group_members")
+      .select("group_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (!membership?.group_id) {
+      setMyGroup(null);
+      setGroupMembers([]);
+      setGroupInvites([]);
+      return;
+    }
+    const { data: group } = await supabase
+      .from("search_groups")
+      .select("id, name, invite_code, created_by")
+      .eq("id", membership.group_id)
+      .single();
+    setMyGroup(group ?? null);
+    if (!group) {
+      setGroupMembers([]);
+      setGroupInvites([]);
+      return;
+    }
+    const { data: members } = await supabase
+      .from("group_members")
+      .select("user_id, joined_at")
+      .eq("group_id", group.id)
+      .order("joined_at", { ascending: true });
+    const memberList = members ?? [];
+    if (memberList.length === 0) {
+      setGroupMembers([]);
+      return;
+    }
+    const userIds = memberList.map((m) => m.user_id).filter(Boolean);
+    const { data: profiles } = await supabase
+      .from("user_profiles")
+      .select("user_id, full_name, email")
+      .in("user_id", userIds);
+    const byId = {};
+    (profiles ?? []).forEach((p) => { byId[p.user_id] = p; });
+    setGroupMembers(
+      memberList.map((m) => ({
+        user_id: m.user_id,
+        joined_at: m.joined_at,
+        full_name: byId[m.user_id]?.full_name ?? null,
+        email: byId[m.user_id]?.email ?? null,
+      }))
+    );
+    const { data: invites } = await supabase
+      .from("group_invites")
+      .select("id, invited_email, status, created_at")
+      .eq("group_id", group.id)
+      .order("created_at", { ascending: false });
+    setGroupInvites(invites ?? []);
+  }, [user?.id, isGuest]);
+
+  useEffect(() => {
+    fetchMyGroup();
+  }, [fetchMyGroup]);
+
+  async function handleSendInvite(e) {
+    e.preventDefault();
+    if (!myGroup?.id || !user?.id || !inviteEmail.trim()) return;
+    setGroupError(null);
+    setSendingInvite(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/invite", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token ?? ""}`,
+        },
+        body: JSON.stringify({
+          invited_email: inviteEmail.trim(),
+          group_id: myGroup.id,
+          group_name: myGroup.name ?? "Unnamed group",
+          inviter_email: user.email ?? "",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setGroupError(data?.error ?? "Failed to send invite");
+        return;
+      }
+      setInviteEmail("");
+      await fetchMyGroup();
+    } finally {
+      setSendingInvite(false);
+    }
+  }
+
+  async function handleCreateGroup(e) {
+    e.preventDefault();
+    if (!user?.id || !createGroupName.trim()) return;
+    setGroupError(null);
+    setCreateGroupLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+        body: JSON.stringify({ name: createGroupName.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setGroupError(data?.error ?? "Failed to create group");
+        return;
+      }
+      setCreateGroupName("");
+      setShowCreateInput(false);
+      await fetchMyGroup();
+    } finally {
+      setCreateGroupLoading(false);
+    }
+  }
+
+  async function handleJoinGroup(e) {
+    e.preventDefault();
+    if (!user?.id || !joinCode.trim()) return;
+    setGroupError(null);
+    setJoinGroupLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/groups/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+        body: JSON.stringify({ invite_code: joinCode.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setGroupError(data?.error ?? "Failed to join group");
+        return;
+      }
+      setJoinCode("");
+      setShowJoinInput(false);
+      await fetchMyGroup();
+    } finally {
+      setJoinGroupLoading(false);
+    }
+  }
+
+  const isGroupCreator = myGroup?.created_by === user?.id;
+
+  async function handleUpdateGroupName(e) {
+    e.preventDefault();
+    if (!myGroup?.id || !user?.id || myGroup.created_by !== user.id) return;
+    const name = groupNameEditValue.trim();
+    if (!name) return;
+    setGroupError(null);
+    setGroupNameSaving(true);
+    try {
+      const { error } = await supabase
+        .from("search_groups")
+        .update({ name })
+        .eq("id", myGroup.id)
+        .eq("created_by", user.id);
+      if (error) {
+        setGroupError(error.message);
+        return;
+      }
+      setMyGroup((g) => (g ? { ...g, name } : null));
+      setGroupNameEditing(false);
+    } finally {
+      setGroupNameSaving(false);
+    }
+  }
+
+  function handleCopyInviteLink() {
+    if (!myGroup?.invite_code) return;
+    const url = `https://launchnyc.vercel.app/join/${myGroup.invite_code}`;
+    navigator.clipboard?.writeText(url).then(() => {
+      setCopyLinkFeedback(true);
+      setTimeout(() => setCopyLinkFeedback(false), 2000);
+    });
+  }
+
+  async function handleRemoveMember(memberUserId) {
+    if (!myGroup?.id || myGroup.created_by !== user?.id || memberUserId === user.id) return;
+    setGroupError(null);
+    setRemovingUserId(memberUserId);
+    try {
+      const { error } = await supabase
+        .from("group_members")
+        .delete()
+        .eq("group_id", myGroup.id)
+        .eq("user_id", memberUserId);
+      if (error) {
+        setGroupError(error.message);
+        return;
+      }
+      await fetchMyGroup();
+    } finally {
+      setRemovingUserId(null);
+    }
+  }
+
+  async function handleLeaveGroup() {
+    if (!myGroup?.id || !user?.id) return;
+    const otherMembers = groupMembers.filter((m) => m.user_id !== user.id);
+    if (isGroupCreator && otherMembers.length > 0) {
+      setGroupError("You'll need to assign a new owner or remove all members first.");
+      return;
+    }
+    setGroupError(null);
+    setLeaveGroupLoading(true);
+    try {
+      const { error } = await supabase
+        .from("group_members")
+        .delete()
+        .eq("group_id", myGroup.id)
+        .eq("user_id", user.id);
+      if (error) {
+        setGroupError(error.message);
+        return;
+      }
+      setMyGroup(null);
+      setGroupMembers([]);
+    } finally {
+      setLeaveGroupLoading(false);
+    }
+  }
 
   async function handleSaveRoommates() {
     if (!user?.id) return;
@@ -452,6 +704,252 @@ export default function AccountPage() {
                   Cancel
                 </button>
               </div>
+            </div>
+          )}
+        </section>
+
+        {/* Your Group */}
+        <section className={`mt-6 ${cardClass}`}>
+          <h2 className="text-base font-semibold text-[#001f3f]">Your Group</h2>
+          {groupError && (
+            <p className="mt-2 text-sm text-red-600">{groupError}</p>
+          )}
+          {myGroup ? (
+            <>
+              <div className="mt-3 flex items-center gap-2">
+                {groupNameEditing ? (
+                  <form onSubmit={handleUpdateGroupName} className="flex flex-1 items-center gap-2">
+                    <input
+                      type="text"
+                      value={groupNameEditValue}
+                      onChange={(e) => setGroupNameEditValue(e.target.value)}
+                      className="flex-1 rounded-lg border border-[#d1d5db] px-3 py-1.5 text-lg font-bold text-[#001f3f] focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
+                      placeholder="Group name"
+                    />
+                    <button
+                      type="submit"
+                      disabled={groupNameSaving || !groupNameEditValue.trim()}
+                      className="rounded-lg bg-[#001f3f] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                    >
+                      {groupNameSaving ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setGroupNameEditing(false); setGroupNameEditValue(myGroup.name || ""); setGroupError(null); }}
+                      className="rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm font-medium text-[#374151] hover:bg-[#f9fafb]"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <h3 className="text-xl font-bold text-[#001f3f]">{myGroup.name || "Unnamed group"}</h3>
+                    {isGroupCreator && (
+                      <button
+                        type="button"
+                        onClick={() => { setGroupNameEditValue(myGroup.name || ""); setGroupNameEditing(true); setGroupError(null); }}
+                        className="rounded-lg border border-[#d1d5db] px-2.5 py-1 text-xs font-medium text-[#374151] hover:bg-[#f9fafb]"
+                      >
+                        Edit name
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="mt-4">
+                <p className="text-xs font-medium text-[#6b7280]">Invite a roommate</p>
+                <form onSubmit={handleSendInvite} className="mt-1 flex flex-wrap items-center gap-2">
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="roommate@email.com"
+                    className="rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm text-[#001f3f] placeholder-[#9ca3af] focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={sendingInvite || !inviteEmail.trim()}
+                    className="rounded-lg bg-[#001f3f] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                  >
+                    {sendingInvite ? "Sending…" : "Send Invite"}
+                  </button>
+                </form>
+              </div>
+
+              {groupInvites.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-medium text-[#6b7280]">Pending invites</p>
+                  <ul className="mt-2 space-y-1.5">
+                    {groupInvites.map((inv) => (
+                      <li
+                        key={inv.id}
+                        className="flex items-center justify-between gap-2 rounded-lg border border-[#e5e7eb] bg-[#fafafa] px-3 py-2"
+                      >
+                        <span className="text-sm text-[#001f3f]">{inv.invited_email}</span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            inv.status === "pending"
+                              ? "bg-amber-100 text-amber-800"
+                              : inv.status === "accepted"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-zinc-100 text-zinc-600"
+                          }`}
+                        >
+                          {inv.status}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="mt-4">
+                <p className="text-xs font-medium text-[#6b7280]">Invite link</p>
+                <p className="mt-0.5 text-xs text-[#6b7280]">
+                  Share this link with roommates who don&apos;t have an account yet.
+                </p>
+                <p className="mt-0.5 break-all font-mono text-sm text-[#001f3f]">
+                  https://launchnyc.vercel.app/join/{myGroup.invite_code}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCopyInviteLink}
+                  className="mt-2 rounded-lg border border-[#001f3f] bg-white px-3 py-1.5 text-sm font-medium text-[#001f3f] hover:bg-[#f0f4f8]"
+                >
+                  {copyLinkFeedback ? "Copied!" : "Copy Link"}
+                </button>
+              </div>
+
+              {groupMembers.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs font-medium text-[#6b7280]">Members</p>
+                  <ul className="mt-2 space-y-2">
+                    {groupMembers.map((m) => {
+                      const email = m.email || (m.user_id === user?.id ? user?.email : null);
+                      const joinedDate = m.joined_at ? formatDate(m.joined_at) : "—";
+                      return (
+                        <li
+                          key={m.user_id}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-[#e5e7eb] bg-[#fafafa] px-3 py-2"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-[#001f3f]">{email || "—"}</p>
+                            <p className="text-xs text-[#6b7280]">Joined {joinedDate}</p>
+                          </div>
+                          {isGroupCreator && m.user_id !== user?.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMember(m.user_id)}
+                              disabled={removingUserId === m.user_id}
+                              className="rounded border border-red-500 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {removingUserId === m.user_id ? "Removing…" : "Remove"}
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              <div className="mt-5 pt-4 border-t border-[#e5e7eb]">
+                {isGroupCreator && groupMembers.length > 1 && (
+                  <p className="mb-2 text-sm text-amber-700">
+                    You&apos;ll need to assign a new owner or remove all members first.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={handleLeaveGroup}
+                  disabled={leaveGroupLoading || (isGroupCreator && groupMembers.length > 1)}
+                  className="rounded-lg border-2 border-red-500 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:hover:bg-white"
+                >
+                  {leaveGroupLoading ? "Leaving…" : "Leave Group"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {!showCreateInput && !showJoinInput && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowCreateInput(true); setShowJoinInput(false); setGroupError(null); }}
+                    className="rounded-lg bg-[#001f3f] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
+                  >
+                    Create a Group
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowJoinInput(true); setShowCreateInput(false); setGroupError(null); }}
+                    className="rounded-lg border border-[#001f3f] px-4 py-2.5 text-sm font-semibold text-[#001f3f] hover:bg-[#f0f4f8]"
+                  >
+                    Join a Group
+                  </button>
+                </div>
+              )}
+              {showCreateInput && (
+                <form onSubmit={handleCreateGroup} className="space-y-2">
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-[#6b7280]">Group name</span>
+                    <input
+                      type="text"
+                      value={createGroupName}
+                      onChange={(e) => setCreateGroupName(e.target.value)}
+                      placeholder="e.g. NYC Search Squad"
+                      className="w-full rounded-lg border border-[#d1d5db] px-3 py-2 text-sm text-[#001f3f] placeholder-[#9ca3af] focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
+                    />
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      disabled={createGroupLoading || !createGroupName.trim()}
+                      className="rounded-lg bg-[#001f3f] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                    >
+                      {createGroupLoading ? "Creating…" : "Create"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowCreateInput(false); setCreateGroupName(""); setGroupError(null); }}
+                      className="rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm font-medium text-[#374151] hover:bg-[#f9fafb]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+              {showJoinInput && (
+                <form onSubmit={handleJoinGroup} className="space-y-2">
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-[#6b7280]">Invite code</span>
+                    <input
+                      type="text"
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value)}
+                      placeholder="Paste invite code"
+                      className="w-full rounded-lg border border-[#d1d5db] px-3 py-2 text-sm text-[#001f3f] placeholder-[#9ca3af] focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
+                    />
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      disabled={joinGroupLoading || !joinCode.trim()}
+                      className="rounded-lg bg-[#001f3f] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                    >
+                      {joinGroupLoading ? "Joining…" : "Join"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowJoinInput(false); setJoinCode(""); setGroupError(null); }}
+                      className="rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm font-medium text-[#374151] hover:bg-[#f9fafb]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           )}
         </section>
