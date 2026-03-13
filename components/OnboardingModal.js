@@ -38,6 +38,7 @@ export default function OnboardingModal({ onComplete }) {
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [moveInDateError, setMoveInDateError] = useState(null);
   const [form, setForm] = useState({
     budget_per_person: "",
     move_in_date: "",
@@ -84,6 +85,10 @@ export default function OnboardingModal({ onComplete }) {
     if (visible && !prevVisibleRef.current) setStep(1);
     prevVisibleRef.current = !!visible;
   }, [visible]);
+
+  useEffect(() => {
+    if (step !== 2) setMoveInDateError(null);
+  }, [step]);
 
   async function handleFinish() {
     if (!user?.id) {
@@ -257,11 +262,21 @@ export default function OnboardingModal({ onComplete }) {
                   <input
                     type="date"
                     value={form.move_in_date}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, move_in_date: e.target.value }))
-                    }
-                    className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-[#001f3f] focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, move_in_date: e.target.value }));
+                      setMoveInDateError(null);
+                    }}
+                    className={`w-full rounded-lg border px-3 py-2.5 text-[#001f3f] focus:outline-none focus:ring-1 ${
+                      moveInDateError
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                        : "border-zinc-300 focus:border-[#001f3f] focus:ring-[#001f3f]"
+                    }`}
                   />
+                  {moveInDateError && (
+                    <p className="mt-1 text-sm text-red-600" role="alert">
+                      {moveInDateError}
+                    </p>
+                  )}
                 </label>
               </div>
             </>
@@ -437,7 +452,16 @@ export default function OnboardingModal({ onComplete }) {
               !isStep1 && (
                 <button
                   type="button"
-                  onClick={() => setStep((s) => s + 1)}
+                  onClick={() => {
+                    if (step === 2) {
+                      if (!form.move_in_date?.trim()) {
+                        setMoveInDateError("Please enter your move-in date to continue.");
+                        return;
+                      }
+                      setMoveInDateError(null);
+                    }
+                    setStep((s) => s + 1);
+                  }}
                   className="rounded-lg bg-[#001f3f] px-5 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
                 >
                   Next

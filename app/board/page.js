@@ -91,7 +91,7 @@ function Card({ apartment, onOpen, onDragStart, onDragEnd }) {
 }
 
 export default function BoardPage() {
-  const { user, isGuest, openSignUpModal } = useAuth();
+  const { user, isGuest, openSignUpModal, showWelcome, handleDismissWelcome } = useAuth();
   const renderCountRef = useRef(0);
   renderCountRef.current += 1;
   const [apartments, setApartments] = useState([]);
@@ -620,6 +620,29 @@ export default function BoardPage() {
 
   return (
     <div className="board-page">
+      {showWelcome && !isGuest && (
+        <div
+          className="board-welcome-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="welcome-title"
+          onClick={handleDismissWelcome}
+        >
+          <div className="board-welcome-card" onClick={(e) => e.stopPropagation()}>
+            <h2 id="welcome-title" className="board-welcome-title">Welcome to LaunchNYC</h2>
+            <p className="board-welcome-text">
+              Your search board is ready. Save apartments, track tours, and move through your pipeline.
+            </p>
+            <button
+              type="button"
+              onClick={handleDismissWelcome}
+              className="board-welcome-dismiss"
+            >
+              Get started
+            </button>
+          </div>
+        </div>
+      )}
       {isGuest && <GuestPreviewBanner />}
       {/* Topbar */}
       <div className="topbar">

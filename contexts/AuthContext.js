@@ -55,7 +55,13 @@ export function AuthProvider({ children, user, isGuest, pathname }) {
   }, [user?.id, isGuest]);
 
   const handleDismissWelcome = useCallback(async () => {
-    if (isGuest || !user?.id) return;
+    if (isGuest || !user?.id) {
+      setShowWelcomeModal(false);
+      setWelcomeDismissed(true);
+      return;
+    }
+    setShowWelcomeModal(false);
+    setWelcomeDismissed(true);
     try {
       const { data: existing } = await supabase
         .from("user_profiles")
@@ -68,23 +74,15 @@ export function AuthProvider({ children, user, isGuest, pathname }) {
           .from("user_profiles")
           .update({ welcome_dismissed: true })
           .eq("user_id", user.id);
-        if (error) {
-          console.error("[AuthContext] update welcome_dismissed failed", error);
-          return;
-        }
+        if (error) console.warn("[AuthContext] update welcome_dismissed failed", error);
       } else {
         const { error } = await supabase
           .from("user_profiles")
           .insert({ user_id: user.id, welcome_dismissed: true });
-        if (error) {
-          console.error("[AuthContext] insert welcome_dismissed failed", error);
-          return;
-        }
+        if (error) console.warn("[AuthContext] insert welcome_dismissed failed", error);
       }
-      setShowWelcomeModal(false);
-      setWelcomeDismissed(true);
     } catch (err) {
-      console.error("[AuthContext] handleDismissWelcome exception", err);
+      console.warn("[AuthContext] handleDismissWelcome exception", err);
     }
   }, [user?.id, isGuest]);
 

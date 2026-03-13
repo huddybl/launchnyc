@@ -3,14 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
-  FileText,
   LayoutGrid,
+  FileText,
   MessageSquare,
-  Home,
-  User,
+  Bell,
 } from "lucide-react";
 
-const SECTION_INNER = "mx-auto max-w-[1280px] px-8";
+const SECTION_INNER = "mx-auto max-w-[1280px] px-6 sm:px-8";
 
 const PROGRESS_STAGES = [
   { label: "Set Up Your Search", start: 0, end: 25 },
@@ -20,7 +19,7 @@ const PROGRESS_STAGES = [
 ];
 
 const TICK_MS = 50;
-const TICKS_PER_STAGE = 60; // 3 seconds = 60 * 50ms
+const TICKS_PER_STAGE = 60;
 
 export default function LandingPage() {
   const [progressStage, setProgressStage] = useState(0);
@@ -85,19 +84,19 @@ export default function LandingPage() {
   }, [minutes]);
 
   return (
-    <div className="min-h-screen w-full bg-[#f8f9ff] font-sans text-[#001f3f] antialiased">
-      {/* Nav: logo left, Log In + Get Started right; same surface #f8f9ff */}
-      <header className="sticky top-0 z-[100] w-full bg-[#f8f9ff] px-12 py-4">
-        <nav className="flex items-center justify-between">
+    <div className="min-h-screen w-full bg-white font-sans text-[#001f3f] antialiased">
+      {/* Navbar */}
+      <header className="sticky top-0 z-[100] w-full bg-[#f4f6f9] border-b border-[#e5e7eb] px-6 py-4 sm:px-8">
+        <nav className="mx-auto flex max-w-[1280px] items-center justify-between">
           <Link href="/landing" className="flex items-center">
             <img
               src="/logo.png"
               alt="LaunchNYC"
               height={56}
-              className="h-14 w-auto"
+              className="h-12 w-auto sm:h-14"
             />
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 sm:gap-6">
             <Link
               href="/login"
               className="text-sm font-medium text-[#001f3f] no-underline transition-opacity hover:opacity-80"
@@ -114,8 +113,8 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      {/* Progress bar row — same #f8f9ff, contained in hero max-width so edges align with headline + mockup */}
-      <div className="w-full bg-[#f8f9ff] py-4">
+      {/* Progress bar pill — exact same as before */}
+      <div className="w-full bg-[#f4f6f9] py-4">
         <div className={SECTION_INNER}>
           <div className="relative h-11 w-full overflow-hidden rounded-[999px] bg-[#001f3f]">
             <div
@@ -139,16 +138,22 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* 2. Hero — same #f8f9ff surface */}
-      <section className="w-full bg-[#f8f9ff] py-16 sm:py-20 lg:py-24">
+      {/* Hero — light gray */}
+      <section className="w-full bg-[#f4f6f9] py-12 sm:py-16 lg:py-20">
         <div className={SECTION_INNER}>
-          <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[1fr_1fr] lg:gap-20">
-          <div className="pl-0">
-            <h1 className="text-4xl font-extrabold leading-[1.1] tracking-tight text-[#001f3f] sm:text-5xl lg:text-[60px]">
-              Your NYC lease application. Ready in <span className="text-[#16a34a]">{Math.min(minutes, 20)} minutes.</span>
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="text-xs font-semibold uppercase tracking-wider text-[#001f3f] sm:text-sm">
+              Built for NYC&apos;s most competitive rental market
+            </p>
+            <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight text-[#001f3f] sm:text-5xl lg:text-6xl">
+              NYC apartments are gone in hours.
+              <br />
+              Are you ready?
             </h1>
-            <p className="mt-5 text-lg text-[#4b5563] leading-relaxed">
-              Stop scrambling. LaunchNYC gets first-time renters organized, prepared, and moving fast — before the apartment is gone.
+            <p className="mt-6 text-lg text-[#6b7280] leading-relaxed sm:text-xl">
+              Get your full application package ready in{" "}
+              <span className="font-semibold text-[#001f3f]">{Math.min(minutes, 20)}</span>{" "}
+              minutes — so when you find the right place, you can move before anyone else.
             </p>
             <div className="mt-8">
               <Link
@@ -157,12 +162,12 @@ export default function LandingPage() {
               >
                 Get Started — it&apos;s free
               </Link>
-              <p className="mt-4 text-sm text-[#6b7280]">Join hundreds of new grads getting NYC-ready</p>
+              <p className="mt-4 text-sm text-[#6b7280]">
+                Free to use · No credit card required
+              </p>
             </div>
-          </div>
-          <div className="flex items-center justify-end">
-            {/* Browser window mockup */}
-            <div className="ml-auto w-full max-w-lg overflow-hidden rounded-lg border border-[#e8ecf2] bg-white shadow-[0_32px_80px_rgba(0,0,0,0.18)]" style={{ transform: "none" }}>
+            {/* Browser mockup — exact same as before, centered */}
+            <div className="mt-12 mx-auto w-full max-w-lg overflow-hidden rounded-lg border border-[#e8ecf2] bg-white shadow-[0_32px_80px_rgba(0,0,0,0.18)]">
               <div className="flex items-center gap-2 border-b border-[#2d2d2d] bg-[#2d2d2d] px-3 py-2.5">
                 <span className="h-3 w-3 rounded-full bg-[#ff5f57]" aria-hidden />
                 <span className="h-3 w-3 rounded-full bg-[#febc2e]" aria-hidden />
@@ -182,117 +187,99 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Problem section — dark navy */}
+      <section className="w-full bg-[#001f3f] py-16 sm:py-20 lg:py-24">
+        <div className={SECTION_INNER}>
+          <h2 className="text-center text-3xl font-bold leading-tight text-white sm:text-4xl lg:text-5xl">
+            StreetEasy has a monopoly. That&apos;s not changing.
+          </h2>
+          <p className="mx-auto mt-6 max-w-[580px] text-center text-lg leading-relaxed text-[#94a3b8]">
+            Brokers and landlords benefit from the broken market — so nobody&apos;s fixing it. The only way to win is to be more prepared and move faster than everyone else.
+          </p>
+          <div className="mt-12 flex flex-col items-center justify-center gap-8 sm:flex-row sm:gap-0 sm:divide-x sm:divide-[#334155]">
+            <div className="text-center px-6 sm:px-10">
+              <p className="text-2xl font-bold text-white sm:text-3xl">Hours</p>
+              <p className="mt-1 text-sm text-[#94a3b8]">How long a good apartment stays listed</p>
+            </div>
+            <div className="text-center px-6 sm:px-10">
+              <p className="text-2xl font-bold text-white sm:text-3xl">1 in 4</p>
+              <p className="mt-1 text-sm text-[#94a3b8]">NYC renters who lose an apartment because someone else applied first</p>
+            </div>
+            <div className="text-center px-6 sm:px-10">
+              <p className="text-2xl font-bold text-white sm:text-3xl">8 docs</p>
+              <p className="mt-1 text-sm text-[#94a3b8]">What every landlord asks for before they&apos;ll consider you</p>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* 3. Feature cards — same #f8f9ff surface */}
-      <section className="w-full bg-[#f8f9ff] py-16 sm:py-20">
+      {/* Feature section — white */}
+      <section className="w-full bg-white py-16 sm:py-20 lg:py-24">
         <div className={SECTION_INNER}>
-          <div className="grid gap-8 sm:grid-cols-3">
-            <div className="rounded-xl border border-[#e8ecf2] bg-white p-6 shadow-sm">
+          <p className="text-center text-xs font-semibold uppercase tracking-wider text-[#001f3f] sm:text-sm">
+            How LaunchNYC works
+          </p>
+          <h2 className="mt-3 text-center text-3xl font-bold text-[#001f3f] sm:text-4xl lg:text-5xl">
+            Your entire search. One place.
+          </h2>
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:mt-16 lg:gap-8">
+            <div className="rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#001f3f]/10 text-[#001f3f]">
+                <LayoutGrid className="h-5 w-5" aria-hidden />
+              </div>
+              <h3 className="mt-4 text-lg font-semibold text-[#001f3f]">Search Board</h3>
+              <p className="mt-2 text-sm leading-relaxed text-[#6b7280]">
+                Save listings from any site, track them through every stage, and search together with your roommates. No more chaotic group chats.
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#001f3f]/10 text-[#001f3f]">
                 <FileText className="h-5 w-5" aria-hidden />
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-[#001f3f]">
-                Build your renter profile once
-              </h3>
-              <p className="mt-2 text-sm text-[#6b7280] leading-relaxed">
-                Fill it out once, use it everywhere. No more digging for your employer&apos;s phone number at 11pm.
+              <h3 className="mt-4 text-lg font-semibold text-[#001f3f]">Application Profile</h3>
+              <p className="mt-2 text-sm leading-relaxed text-[#6b7280]">
+                Fill out your info once. Every field a landlord could ask for, ready to export as a professional package in one click.
               </p>
             </div>
-            <div className="rounded-xl border border-[#e8ecf2] bg-white p-6 shadow-sm">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#001f3f]/10 text-[#001f3f]">
-                <LayoutGrid className="h-5 w-5" aria-hidden />
-              </div>
-              <h3 className="mt-4 text-lg font-semibold text-[#001f3f]">
-                Track your search like a pro
-              </h3>
-              <p className="mt-2 text-sm text-[#6b7280] leading-relaxed">
-                Save apartments, move them through stages, and never lose track of a listing again.
-              </p>
-            </div>
-            <div className="rounded-xl border border-[#e8ecf2] bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-[#e5e7eb] bg-white p-6 shadow-sm">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#001f3f]/10 text-[#001f3f]">
                 <MessageSquare className="h-5 w-5" aria-hidden />
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-[#001f3f]">
-                Your AI advisor knows your search
-              </h3>
-              <p className="mt-2 text-sm text-[#6b7280] leading-relaxed">
-                Ask anything. It already knows your budget, neighborhoods, and where you stand.
+              <h3 className="mt-4 text-lg font-semibold text-[#001f3f]">AI Advisor</h3>
+              <p className="mt-2 text-sm leading-relaxed text-[#6b7280]">
+                An advisor built into the app that knows your budget, timeline, and documents — and tells you exactly what to do next.
+              </p>
+            </div>
+            <div className="relative rounded-xl border border-[#e5e7eb] bg-[#f9fafb] p-6 shadow-sm">
+              <span className="absolute right-4 top-4 rounded bg-[#e5e7eb] px-2 py-0.5 text-xs font-medium text-[#6b7280]">
+                Coming Soon
+              </span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#001f3f]/10 text-[#9ca3af]">
+                <Bell className="h-5 w-5" aria-hidden />
+              </div>
+              <h3 className="mt-4 text-lg font-semibold text-[#9ca3af]">Daily Alerts</h3>
+              <p className="mt-2 text-sm leading-relaxed text-[#9ca3af]">
+                Coming soon: new listings matching your criteria pushed to your board the moment they hit the market.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 4. Everything you need — same #f8f9ff surface */}
-      <section className="w-full bg-[#f8f9ff] py-16 sm:py-20">
-        <div className={SECTION_INNER}>
-          <h2 className="text-center text-2xl font-bold tracking-tight text-[#001f3f] sm:text-3xl">
-            Everything you need, in one place.
+      {/* Bottom CTA — dark navy */}
+      <section className="w-full bg-[#001f3f] py-14 sm:py-20">
+        <div className={`flex flex-col items-center justify-center gap-8 ${SECTION_INNER}`}>
+          <h2 className="text-center text-2xl font-bold text-white sm:text-3xl lg:text-4xl">
+            Stop losing apartments to people who were more ready.
           </h2>
-          <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:mt-16">
-            <div className="flex gap-4">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[#001f3f]/10 text-[#001f3f]">
-                <LayoutGrid className="h-5 w-5" aria-hidden />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-[#001f3f]">Search Board</h3>
-                <p className="mt-2 text-sm text-[#6b7280] leading-relaxed">
-                  Save apartments from any site and track them through every stage from first look to signed lease.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-4">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[#001f3f]/10 text-[#001f3f]">
-                <User className="h-5 w-5" aria-hidden />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-[#001f3f]">Renter Profile</h3>
-                <p className="mt-2 text-sm text-[#6b7280] leading-relaxed">
-                  Fill out your info once. Every field a landlord or broker could ask for, ready to go.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-4">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[#001f3f]/10 text-[#001f3f]">
-                <Home className="h-5 w-5" aria-hidden />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-[#001f3f]">Search HQ</h3>
-                <p className="mt-2 text-sm text-[#6b7280] leading-relaxed">
-                  Your week-by-week plan from start to signed, with your actual progress tracked in real time.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-4">
-              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[#001f3f]/10 text-[#001f3f]">
-                <MessageSquare className="h-5 w-5" aria-hidden />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-[#001f3f]">AI Advisor</h3>
-                <p className="mt-2 text-sm text-[#6b7280] leading-relaxed">
-                  An advisor that knows your budget, timeline, and neighborhoods — ask it anything, anytime.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 5. Bottom CTA — full-width outer (bg), inner max-w 1280px */}
-      <section className="w-full bg-[#001f3f] py-14 sm:py-16">
-        <div className={`flex flex-col items-center justify-center gap-6 sm:flex-row sm:gap-8 ${SECTION_INNER}`}>
-          <p className="text-center text-lg font-medium text-white sm:text-xl">
-            Moving to NYC this summer? Get organized today.
-          </p>
           <Link
             href="/login"
-            className="flex-shrink-0 rounded-lg border-2 border-white bg-transparent px-6 py-2.5 text-sm font-semibold text-white no-underline transition-colors hover:bg-white hover:text-[#001f3f]"
+            className="inline-flex items-center justify-center rounded-lg bg-white px-6 py-3.5 text-base font-semibold text-[#001f3f] no-underline transition-opacity hover:opacity-90"
           >
-            Get Started — it&apos;s free
+            Start Your Search — It&apos;s Free
           </Link>
         </div>
       </section>

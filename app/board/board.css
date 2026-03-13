@@ -26,6 +26,52 @@
   flex-direction: column;
 }
 
+/* ----- Welcome modal (once after onboarding) ----- */
+.board-page .board-welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 31, 63, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.board-page .board-welcome-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  max-width: 400px;
+  padding: 32px;
+  text-align: center;
+}
+.board-page .board-welcome-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 0 0 12px;
+}
+.board-page .board-welcome-text {
+  font-size: 0.9375rem;
+  color: var(--muted);
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+.board-page .board-welcome-dismiss {
+  background: var(--navy);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 24px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.board-page .board-welcome-dismiss:hover {
+  opacity: 0.9;
+}
+
 /* ----- Page header ----- */
 .board-page .topbar {
   background: var(--white);
