@@ -35,6 +35,9 @@ export default function AccountPage() {
     num_people: null,
     neighborhoods: [],
   });
+  const [roommatesEditing, setRoommatesEditing] = useState(false);
+  const [roommatesForm, setRoommatesForm] = useState([""]);
+  const [roommatesSaving, setRoommatesSaving] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!user?.id || isGuest) return;
@@ -54,6 +57,8 @@ export default function AccountPage() {
         num_people: data.num_people ?? null,
         neighborhoods: Array.isArray(data.neighborhoods) ? data.neighborhoods : [],
       });
+      const emails = Array.isArray(data.roommate_emails) ? data.roommate_emails : [];
+      setRoommatesForm(emails.length > 0 ? [...emails, ""] : [""]);
     } else {
       setForm({
         budget_max: "",
@@ -62,8 +67,37 @@ export default function AccountPage() {
         num_people: null,
         neighborhoods: [],
       });
+      setRoommatesForm([""]);
     }
   }, [user?.id, isGuest]);
+
+  async function handleSaveRoommates() {
+    if (!user?.id) return;
+    setRoommatesSaving(true);
+    const emails = roommatesForm.map((s) => String(s).trim()).filter(Boolean);
+    try {
+      const { error } = await supabase
+        .from("user_profiles")
+        .upsert(
+          { user_id: user.id, roommate_emails: emails.length > 0 ? emails : null },
+          { onConflict: "user_id" }
+        )
+        .select();
+      if (!error) {
+        setProfile((p) => (p ? { ...p, roommate_emails: emails } : { user_id: user.id, roommate_emails: emails }));
+        setRoommatesForm(emails.length > 0 ? [...emails, ""] : [""]);
+        setRoommatesEditing(false);
+      }
+    } finally {
+      setRoommatesSaving(false);
+    }
+  }
+
+  function startRoommatesEdit() {
+    const emails = Array.isArray(profile?.roommate_emails) ? profile.roommate_emails : [];
+    setRoommatesForm(emails.length > 0 ? [...emails, ""] : [""]);
+    setRoommatesEditing(true);
+  }
 
   useEffect(() => {
     fetchData().finally(() => setLoading(false));
@@ -367,6 +401,96 @@ export default function AccountPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Your Roommates */}
+        <section className={`mt-6 ${cardClass}`}>
+          <h2 className="text-base font-semibold text-[#001f3f]">Your Roommates</h2>
+          {!roommatesEditing ? (
+            <>
+              {Array.isArray(profile?.roommate_emails) && profile.roommate_emails.length > 0 ? (
+                <ul className="mt-3 flex flex-wrap gap-2">
+                  {profile.roommate_emails.map((email, i) => (
+                    <li
+                      key={i}
+                      className="inline-flex rounded-full bg-[#f0f4f8] px-2.5 py-0.5 text-xs font-medium text-[#001f3f]"
+                    >
+                      {email}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-[#6b7280]">No roommates added yet</p>
+              )}
+              <button
+                type="button"
+                onClick={startRoommatesEdit}
+                className="mt-3 rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm font-medium text-[#374151] hover:bg-[#f9fafb]"
+              >
+                Edit
+              </button>
+            </>
+          ) : (
+            <div className="mt-4 space-y-2">
+              {roommatesForm.map((email, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) =>
+                      setRoommatesForm((prev) =>
+                        prev.map((em, j) => (j === i ? e.target.value : em))
+                      )
+                    }
+                    placeholder="roommate@email.com"
+                    className="flex-1 rounded-lg border border-[#d1d5db] px-3 py-2 text-sm text-[#001f3f] placeholder-[#9ca3af] focus:border-[#001f3f] focus:outline-none focus:ring-1 focus:ring-[#001f3f]"
+                  />
+                  {i === roommatesForm.length - 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => setRoommatesForm((p) => [...p, ""])}
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-[#d1d5db] text-[#6b7280] hover:bg-[#f9fafb]"
+                      aria-label="Add another"
+                    >
+                      +
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRoommatesForm((p) => p.filter((_, j) => j !== i))
+                      }
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-[#d1d5db] text-[#6b7280] hover:bg-[#f9fafb]"
+                      aria-label="Remove"
+                    >
+                      −
+                    </button>
+                  )}
+                </div>
+              ))}
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveRoommates}
+                  disabled={roommatesSaving}
+                  className="rounded-lg bg-[#001f3f] px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+                >
+                  {roommatesSaving ? "Saving…" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoommatesEditing(false);
+                    const emails = Array.isArray(profile?.roommate_emails) ? profile.roommate_emails : [];
+                    setRoommatesForm(emails.length > 0 ? [...emails, ""] : [""]);
+                  }}
+                  className="rounded-lg border border-[#d1d5db] px-3 py-1.5 text-sm font-medium text-[#374151] hover:bg-[#f9fafb]"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           )}
