@@ -884,6 +884,7 @@ export default function AccountPage() {
             </>
           ) : (
             <div className="mt-3 space-y-3">
+              <p className="text-sm text-[#6b7280]">Search together with your roommates on a shared board</p>
               {!showCreateInput && !showJoinInput && (
                 <div className="flex flex-wrap gap-2">
                   <button
