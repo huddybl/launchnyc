@@ -59,8 +59,7 @@ export default function LoginPage() {
             body: JSON.stringify({ invite_id: pendingInviteId }),
           });
           if (res.ok) {
-            router.replace("/board?joined=1");
-            router.refresh();
+            router.push("/board?joined=1");
             return;
           }
         }
@@ -75,13 +74,11 @@ export default function LoginPage() {
             body: JSON.stringify({ invite_code: pendingCode }),
           });
           if (res.ok) {
-            router.replace("/board?joined=1");
-            router.refresh();
+            router.push("/board?joined=1");
             return;
           }
         }
-        router.replace("/");
-        router.refresh();
+        router.push("/board");
       } else {
         const { error } = await supabase.auth.signUp({
           email: email.trim(),
@@ -102,8 +99,7 @@ export default function LoginPage() {
             body: JSON.stringify({ invite_id: pendingInviteId }),
           });
           if (res.ok) {
-            router.replace("/board?joined=1");
-            router.refresh();
+            router.push("/board?joined=1");
             return;
           }
         }
@@ -118,15 +114,11 @@ export default function LoginPage() {
             body: JSON.stringify({ invite_code: pendingCode }),
           });
           if (res.ok) {
-            router.replace("/board?joined=1");
-            router.refresh();
+            router.push("/board?joined=1");
             return;
           }
         }
-        setMessage({
-          type: "success",
-          text: "Check your email to confirm your account, then log in.",
-        });
+        router.push("/board");
       }
     } catch (err) {
       setMessage({
