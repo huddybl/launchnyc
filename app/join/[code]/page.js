@@ -19,6 +19,7 @@ export default function JoinGroupPage() {
   const [groupName, setGroupName] = useState(null);
 
   useEffect(() => {
+    console.log("[Join] code:", code);
     if (!code) {
       setStatus("error");
       return;

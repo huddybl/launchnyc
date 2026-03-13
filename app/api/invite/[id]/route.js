@@ -11,12 +11,17 @@ export async function GET(_request, { params }) {
   if (!id || typeof id !== "string") {
     return NextResponse.json({ error: "Invalid invite id" }, { status: 400 });
   }
-  const { data: invite, error } = await supabaseAdmin
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  console.log("[Join] service role key prefix:", serviceRoleKey.slice(0, 20));
+  const { data, error } = await supabaseAdmin
     .from("group_invites")
     .select("*, search_groups(name)")
     .eq("id", id.trim())
     .eq("status", "pending")
     .single();
+  console.log("[Join] invite data:", data);
+  console.log("[Join] invite error:", error);
+  const invite = data;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
