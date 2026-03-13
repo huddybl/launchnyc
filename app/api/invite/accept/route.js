@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
+);
+
 async function getSupabaseAndUser(request) {
   const authHeader = request.headers.get("Authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
@@ -30,7 +35,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "invite_id is required" }, { status: 400 });
   }
 
-  const { data: invite, error: inviteError } = await supabase
+  const { data: invite, error: inviteError } = await supabaseAdmin
     .from("group_invites")
     .select("id, group_id, invited_email, status")
     .eq("id", inviteId)
@@ -49,21 +54,27 @@ export async function POST(request) {
     return NextResponse.json({ error: "This invite was sent to a different email" }, { status: 403 });
   }
 
-  const { error: memberError } = await supabase
+  const { error: memberError } = await supabaseAdmin
     .from("group_members")
     .insert({ group_id: invite.group_id, user_id: user.id });
+  console.log("[Join] member insert error:", memberError);
   if (memberError) {
     if (memberError.code === "23505") {
-      await supabase.from("group_invites").update({ status: "accepted" }).eq("id", invite.id);
+      const { error: updateErr } = await supabaseAdmin
+        .from("group_invites")
+        .update({ status: "accepted" })
+        .eq("id", invite.id);
+      console.log("[Join] invite update error (23505 branch):", updateErr);
       return NextResponse.json({ group_id: invite.group_id });
     }
     return NextResponse.json({ error: memberError.message }, { status: 500 });
   }
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await supabaseAdmin
     .from("group_invites")
     .update({ status: "accepted" })
     .eq("id", invite.id);
+  console.log("[Join] invite update error:", updateError);
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
