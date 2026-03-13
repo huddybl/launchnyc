@@ -12,22 +12,19 @@ export async function GET(_request, { params }) {
   );
   const { data: invite, error } = await supabase
     .from("group_invites")
-    .select("id, group_id, status")
+    .select("*, search_groups(name)")
     .eq("id", id.trim())
-    .maybeSingle();
+    .eq("status", "pending")
+    .single();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  if (!invite || invite.status !== "pending") {
+  if (!invite) {
     return NextResponse.json({ error: "Invalid or expired invite" }, { status: 404 });
   }
-  const { data: group } = await supabase
-    .from("search_groups")
-    .select("name")
-    .eq("id", invite.group_id)
-    .single();
+  const groupName = invite.search_groups?.name ?? "a group";
   return NextResponse.json({
     group_id: invite.group_id,
-    group_name: group?.name ?? "a group",
+    group_name: groupName,
   });
 }
