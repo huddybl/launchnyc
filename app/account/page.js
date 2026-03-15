@@ -126,13 +126,14 @@ export default function AccountPage() {
     }
     const { data: members } = await supabase
       .from("group_members")
-      .select("user_id, joined_at, user_emails(email)")
+      .select("user_id, joined_at, user_profiles(full_name, email)")
       .eq("group_id", group.id)
       .order("joined_at", { ascending: true });
     const memberList = (members ?? []).map((m) => ({
       user_id: m.user_id,
       joined_at: m.joined_at,
-      email: m.user_emails?.email ?? null,
+      full_name: m.user_profiles?.full_name ?? null,
+      email: m.user_profiles?.email ?? null,
     }));
     setGroupMembers(memberList);
     const { data: invites } = await supabase
@@ -188,6 +189,15 @@ export default function AccountPage() {
     e.preventDefault();
     if (!user?.id || !createGroupName.trim()) return;
     setGroupError(null);
+    const { data: existingMembership } = await supabase
+      .from("group_members")
+      .select("group_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (existingMembership) {
+      setGroupError("You're already part of a group. Leave your current group to create a new one.");
+      return;
+    }
     setCreateGroupLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -777,7 +787,7 @@ export default function AccountPage() {
                 </div>
               )}
 
-              {groupInvites.length > 0 && (
+              {isGroupCreator && groupInvites.length > 0 && (
                 <div className="mt-3">
                   <p className="text-xs font-medium text-[#6b7280]">Pending invites</p>
                   <ul className="mt-2 space-y-1.5">
@@ -804,29 +814,32 @@ export default function AccountPage() {
                 </div>
               )}
 
-              <div className="mt-4">
-                <p className="text-xs font-medium text-[#6b7280]">Invite link</p>
-                <p className="mt-0.5 text-xs text-[#6b7280]">
-                  Share this link with roommates who don&apos;t have an account yet.
-                </p>
-                <p className="mt-0.5 break-all font-mono text-sm text-[#001f3f]">
-                  https://launchnyc.vercel.app/join/{myGroup.invite_code}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleCopyInviteLink}
-                  className="mt-2 rounded-lg border border-[#001f3f] bg-white px-3 py-1.5 text-sm font-medium text-[#001f3f] hover:bg-[#f0f4f8]"
-                >
-                  {copyLinkFeedback ? "Copied!" : "Copy Link"}
-                </button>
-              </div>
+              {isGroupCreator && (
+                <div className="mt-4">
+                  <p className="text-xs font-medium text-[#6b7280]">Invite link</p>
+                  <p className="mt-0.5 text-xs text-[#6b7280]">
+                    Share this link with roommates who don&apos;t have an account yet.
+                  </p>
+                  <p className="mt-0.5 break-all font-mono text-sm text-[#001f3f]">
+                    https://launchnyc.vercel.app/join/{myGroup.invite_code}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCopyInviteLink}
+                    className="mt-2 rounded-lg border border-[#001f3f] bg-white px-3 py-1.5 text-sm font-medium text-[#001f3f] hover:bg-[#f0f4f8]"
+                  >
+                    {copyLinkFeedback ? "Copied!" : "Copy Link"}
+                  </button>
+                </div>
+              )}
 
               {groupMembers.length > 0 && (
                 <div className="mt-4">
                   <p className="text-xs font-medium text-[#6b7280]">Members</p>
                   <ul className="mt-2 space-y-2">
                     {groupMembers.map((m) => {
-                      const email = m.email || (m.user_id === user?.id ? user?.email : null);
+                      const email = m.email ?? (m.user_id === user?.id ? user?.email : null);
+                      const name = m.full_name ?? (m.user_id === user?.id ? profile?.full_name : null);
                       const joinedDate = m.joined_at ? formatDate(m.joined_at) : "—";
                       return (
                         <li
@@ -834,7 +847,9 @@ export default function AccountPage() {
                           className="flex items-center justify-between gap-2 rounded-lg border border-[#e5e7eb] bg-[#fafafa] px-3 py-2"
                         >
                           <div>
-                            <p className="text-sm font-medium text-[#001f3f]">{email || "—"}</p>
+                            <p className="text-sm font-medium text-[#001f3f]">
+                              {[name, email].filter(Boolean).join(" · ") || "—"}
+                            </p>
                             <p className="text-xs text-[#6b7280]">Joined {joinedDate}</p>
                           </div>
                           {isGroupCreator && m.user_id !== user?.id && (

@@ -30,6 +30,18 @@ export async function POST(request) {
     return NextResponse.json({ error: "Group name is required" }, { status: 400 });
   }
 
+  const { data: existingMembership } = await supabase
+    .from("group_members")
+    .select("group_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (existingMembership) {
+    return NextResponse.json(
+      { error: "You're already part of a group. Leave your current group to create a new one." },
+      { status: 400 }
+    );
+  }
+
   const { data: group, error: insertGroupError } = await supabase
     .from("search_groups")
     .insert({ name: name || null, created_by: user.id })
