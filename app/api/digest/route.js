@@ -253,11 +253,15 @@ export async function GET(request) {
       existingAddresses.add(normalizeAddress(a.street || ""));
     });
 
+    const boardAddressList = (existingApts ?? []).map((a) => a.street || "(empty)");
+    console.log(`[digest]   User ${userId} board addresses (${boardAddressList.length} total, checking against):`, boardAddressList);
+
     const { data: sentRows } = await supabaseAdmin
       .from("digest_sent")
-      .select("listing_id")
+      .select("listing_id, sent_at")
       .eq("user_id", userId);
     const sentIds = new Set((sentRows ?? []).map((r) => r.listing_id));
+    const sentByListingId = new Map((sentRows ?? []).map((r) => [r.listing_id, r]));
     console.log(`[digest]   Dedup: ${existingAddresses.size} existing addresses on board, ${sentIds.size} already sent for this user`);
 
     const toInsert = [];
@@ -265,15 +269,28 @@ export async function GET(request) {
     let dedupBoard = 0;
     for (const item of byNeighborhood) {
       const listingId = getListingId(item.raw ?? item);
+      const listingAddress = item.street || item.listing_id || "(no address)";
+
       if (sentIds.has(listingId)) {
         dedupSent += 1;
-        console.log(`[digest]   listing [${item.street || "?"}]: dedup FAIL (already in digest_sent)`);
+        const matchingSent = sentByListingId.get(listingId);
+        console.log(`[digest]   --- Listing REJECTED by dedup (passed neighborhood filter) ---`);
+        console.log(`[digest]      1. listing address/id: ${listingAddress} (listing_id: ${listingId})`);
+        console.log(`[digest]      2. found in digest_sent: YES`, matchingSent ? { listing_id: matchingSent.listing_id, sent_at: matchingSent.sent_at } : "(record: " + JSON.stringify(matchingSent) + ")");
+        console.log(`[digest]      3. found on user's board: (not checked — skipped by digest_sent first)`);
+        console.log(`[digest]      4. skipped because: already in digest_sent`);
         continue;
       }
+
       const addrNorm = normalizeAddress(item.street || "");
       if (addrNorm && existingAddresses.has(addrNorm)) {
         dedupBoard += 1;
-        console.log(`[digest]   listing [${item.street || "?"}]: dedup FAIL (address already on board)`);
+        const matchingBoardStreet = (existingApts ?? []).find((a) => normalizeAddress(a.street || "") === addrNorm)?.street ?? addrNorm;
+        console.log(`[digest]   --- Listing REJECTED by dedup (passed neighborhood filter) ---`);
+        console.log(`[digest]      1. listing address/id: ${listingAddress} (listing_id: ${listingId})`);
+        console.log(`[digest]      2. found in digest_sent: NO`);
+        console.log(`[digest]      3. found on user's board: YES (matching board address: "${matchingBoardStreet}")`);
+        console.log(`[digest]      4. skipped because: address already on board`);
         continue;
       }
 
