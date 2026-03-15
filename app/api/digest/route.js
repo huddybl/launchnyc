@@ -129,12 +129,32 @@ export async function GET(request) {
     .not("budget_max", "is", null);
 
   if (!profiles?.length) {
-    return NextResponse.json({ processed: 0, message: "No eligible users" });
+    console.log("[digest] No eligible users (move_in_date and budget_max set)");
+    return NextResponse.json({
+      processed: 0,
+      eligible: 0,
+      rentcast_results: 0,
+      passed_price_filter: 0,
+      passed_neighborhood_filter: 0,
+      new_matches: 0,
+      emailed: 0,
+      message: "No eligible users",
+    });
   }
+
+  console.log("[digest] Eligible users:", profiles.length);
+  profiles.forEach((p, i) => {
+    console.log(`[digest]   user ${i + 1}: user_id=${p.user_id}, budget_max=${p.budget_max}, bedrooms=${p.bedrooms ?? "null"}, neighborhoods=${JSON.stringify(Array.isArray(p.neighborhoods) ? p.neighborhoods : p.neighborhoods)}`);
+  });
 
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "LaunchNYC <onboarding@resend.dev>";
   let processed = 0;
   const errors = [];
+  let rentcastResults = 0;
+  let passedPriceFilter = 0;
+  let passedNeighborhoodFilter = 0;
+  let newMatches = 0;
+  let emailed = 0;
 
   for (const profile of profiles) {
     const userId = profile.user_id;
@@ -142,17 +162,26 @@ export async function GET(request) {
     const bedrooms = profile.bedrooms != null ? Number(profile.bedrooms) : null;
     const targetNeighborhoods = Array.isArray(profile.neighborhoods) ? profile.neighborhoods : [];
 
-    if (!userId || (budgetMax !== budgetMax)) continue;
+    if (!userId || (budgetMax !== budgetMax)) {
+      console.log(`[digest] Skipping user ${userId}: missing userId or invalid budget_max`);
+      continue;
+    }
+
+    console.log(`[digest] Processing user ${userId} (budget_max=${budgetMax}, bedrooms=${bedrooms ?? "any"}, neighborhoods=${targetNeighborhoods.length ? targetNeighborhoods.join(", ") : "any"})`);
 
     let email;
     try {
       const { data: { user: authUser } } = await supabaseAdmin.auth.admin.getUserById(userId);
       email = authUser?.email;
     } catch (e) {
+      console.log(`[digest]   getUserById failed for ${userId}:`, e?.message ?? e);
       errors.push({ userId, error: "getUserById failed" });
       continue;
     }
-    if (!email) continue;
+    if (!email) {
+      console.log(`[digest]   No email for user ${userId}, skipping`);
+      continue;
+    }
 
     const bedroomsParam = bedrooms != null ? Math.min(Math.max(0, Math.floor(bedrooms)), 5) : "";
     const url = new URL("https://api.rentcast.io/v1/listings/rental/long-term");
@@ -167,13 +196,17 @@ export async function GET(request) {
         headers: { "X-Api-Key": apiKey },
       });
       if (!res.ok) {
+        console.log(`[digest]   RentCast failed for ${userId}: status=${res.status}`);
         errors.push({ userId, error: `RentCast ${res.status}` });
         continue;
       }
       const json = await res.json();
       const raw = Array.isArray(json) ? json : json?.listings ?? json?.data ?? [];
       listings = raw.filter((item) => item != null);
+      rentcastResults += listings.length;
+      console.log(`[digest]   RentCast returned ${listings.length} listings for user ${userId}`);
     } catch (e) {
+      console.log(`[digest]   RentCast fetch error for ${userId}:`, e?.message ?? e);
       errors.push({ userId, error: String(e?.message ?? e) });
       continue;
     }
@@ -187,10 +220,28 @@ export async function GET(request) {
     const byBudget = budgetMax > 0
       ? normalizedListings.filter((l) => l.price != null && l.price <= budgetMax)
       : normalizedListings;
+    const budgetFilteredOut = normalizedListings.length - byBudget.length;
+    if (budgetFilteredOut > 0) {
+      console.log(`[digest]   Price filter: ${byBudget.length} passed (<= ${budgetMax}), ${budgetFilteredOut} failed`);
+    }
 
     const byNeighborhood = targetNeighborhoods.length > 0
       ? byBudget.filter((l) => l.neighborhood && targetNeighborhoods.includes(l.neighborhood))
       : byBudget;
+    passedPriceFilter += byBudget.length;
+    passedNeighborhoodFilter += byNeighborhood.length;
+    if (targetNeighborhoods.length > 0) {
+      const neighborhoodFilteredOut = byBudget.length - byNeighborhood.length;
+      console.log(`[digest]   Neighborhood filter (targets: ${targetNeighborhoods.join(", ")}): ${byNeighborhood.length} passed, ${neighborhoodFilteredOut} failed`);
+    }
+
+    normalizedListings.forEach((l, idx) => {
+      const priceOk = budgetMax <= 0 || (l.price != null && l.price <= budgetMax);
+      const neighborhoodOk = targetNeighborhoods.length === 0 || (l.neighborhood && targetNeighborhoods.includes(l.neighborhood));
+      const addr = l.street || "(no address)";
+      if (!priceOk) console.log(`[digest]   listing ${idx + 1} [${addr}]: price filter FAIL (price=${l.price}, budget_max=${budgetMax})`);
+      else if (!neighborhoodOk) console.log(`[digest]   listing ${idx + 1} [${addr}]: neighborhood filter FAIL (neighborhood=${l.neighborhood || "unknown"}, targets=${targetNeighborhoods.join(", ") || "any"})`);
+    });
 
     const existingAddresses = new Set();
     const { data: existingApts } = await supabaseAdmin
@@ -207,13 +258,24 @@ export async function GET(request) {
       .select("listing_id")
       .eq("user_id", userId);
     const sentIds = new Set((sentRows ?? []).map((r) => r.listing_id));
+    console.log(`[digest]   Dedup: ${existingAddresses.size} existing addresses on board, ${sentIds.size} already sent for this user`);
 
     const toInsert = [];
+    let dedupSent = 0;
+    let dedupBoard = 0;
     for (const item of byNeighborhood) {
       const listingId = getListingId(item.raw ?? item);
-      if (sentIds.has(listingId)) continue;
+      if (sentIds.has(listingId)) {
+        dedupSent += 1;
+        console.log(`[digest]   listing [${item.street || "?"}]: dedup FAIL (already in digest_sent)`);
+        continue;
+      }
       const addrNorm = normalizeAddress(item.street || "");
-      if (addrNorm && existingAddresses.has(addrNorm)) continue;
+      if (addrNorm && existingAddresses.has(addrNorm)) {
+        dedupBoard += 1;
+        console.log(`[digest]   listing [${item.street || "?"}]: dedup FAIL (address already on board)`);
+        continue;
+      }
 
       toInsert.push({
         listing_id: listingId,
@@ -225,7 +287,11 @@ export async function GET(request) {
       });
     }
 
+    newMatches += toInsert.length;
+    console.log(`[digest]   New matches after all filters: ${toInsert.length} (skipped: ${dedupSent} already sent, ${dedupBoard} already on board)`);
+
     if (toInsert.length === 0) {
+      console.log(`[digest]   No new matches for user ${userId}, skipping email`);
       processed += 1;
       continue;
     }
@@ -246,6 +312,7 @@ export async function GET(request) {
           notes: null,
         });
       if (insertErr) {
+        console.log(`[digest]   Apartment insert failed for ${item.street || item.listing_id}:`, insertErr.message);
         errors.push({ userId, listing_id: item.listing_id, error: insertErr.message });
         continue;
       }
@@ -277,21 +344,37 @@ export async function GET(request) {
         <p style="margin-top:24px;font-size:12px;color:#9ca3af;">You're receiving this because you have an active search on LaunchNYC. Unsubscribe</p>
       </div>`;
 
+    console.log(`[digest]   Attempting Resend email to ${email} for ${toInsert.length} listings (subject: ${subject})`);
     try {
-      await resend.emails.send({
+      const resendResult = await resend.emails.send({
         from: fromEmail,
         to: email,
         subject,
         html,
       });
+      console.log(`[digest]   Resend response:`, JSON.stringify(resendResult));
+      if (resendResult?.error) {
+        console.log(`[digest]   Resend error:`, resendResult.error);
+        errors.push({ userId, error: `Resend: ${resendResult.error?.message ?? resendResult.error}` });
+      } else {
+        emailed += 1;
+      }
     } catch (e) {
+      console.log(`[digest]   Resend exception:`, e?.message ?? e);
       errors.push({ userId, error: `Resend: ${e?.message ?? e}` });
     }
     processed += 1;
   }
 
+  console.log("[digest] Done. processed=", processed, "errors=", errors.length);
   return NextResponse.json({
     processed,
+    eligible: profiles.length,
+    rentcast_results: rentcastResults,
+    passed_price_filter: passedPriceFilter,
+    passed_neighborhood_filter: passedNeighborhoodFilter,
+    new_matches: newMatches,
+    emailed,
     errors: errors.length ? errors : undefined,
   });
 }
