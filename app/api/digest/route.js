@@ -165,9 +165,12 @@ export async function GET(request) {
 
   const url = new URL(request.url);
   const testMode = url.searchParams.get("test") === "true";
-  const profilesToProcess = testMode ? profiles.slice(0, 1) : profiles;
+  const profilesToProcess = testMode || mockMode ? profiles.slice(0, 1) : profiles;
   if (testMode) {
     console.log("[digest] TEST MODE: only processing first 1 eligible user (of", profiles.length, "total)");
+  }
+  if (mockMode) {
+    console.log("[digest] MOCK MODE: only first eligible user, skip all filters/dedup — email preview only");
   }
 
   console.log("[digest] Eligible users:", profilesToProcess.length, testMode ? `(test mode: 1 of ${profiles.length})` : "");
@@ -212,20 +215,38 @@ export async function GET(request) {
     }
 
     let listings = [];
+    let toInsert = [];
     if (mockMode) {
       listings = [...MOCK_LISTING];
       rentcastResults += listings.length;
-      console.log(`[digest]   Mock mode: using ${listings.length} hardcoded listing(s) for user ${userId}`);
+      console.log(`[digest]   Mock mode: using ${listings.length} hardcoded listing(s), skipping ALL filters and dedup`);
+      const normalizedForMock = listings.map((l) => {
+        const zip = l?.zipCode ?? l?.zip ?? l?.address?.zipCode ?? (l?.address && typeof l.address === "object" ? l.address.zipCode : "") ?? "";
+        const neighborhood = getNeighborhoodFromZip(zip);
+        return { ...mapListing(l, neighborhood), raw: l };
+      });
+      toInsert = normalizedForMock.map((item) => ({
+        listing_id: getListingId(item.raw ?? item),
+        neighborhood: item.neighborhood || null,
+        street: item.street || null,
+        price: item.price,
+        beds: item.beds,
+        baths: item.baths,
+      }));
+      passedPriceFilter += toInsert.length;
+      passedNeighborhoodFilter += toInsert.length;
+      newMatches += toInsert.length;
+      console.log(`[digest]   Mock mode: sending ${toInsert.length} listing(s) directly to first user's email (no insert/digest_sent)`);
     } else {
       const bedroomsParam = bedrooms != null ? Math.min(Math.max(0, Math.floor(bedrooms)), 5) : "";
-      const url = new URL("https://api.rentcast.io/v1/listings/rental/long-term");
-      url.searchParams.set("city", "New York");
-      url.searchParams.set("state", "NY");
-      url.searchParams.set("limit", "20");
-      if (bedroomsParam !== "") url.searchParams.set("bedrooms", String(bedroomsParam));
+      const rentcastUrl = new URL("https://api.rentcast.io/v1/listings/rental/long-term");
+      rentcastUrl.searchParams.set("city", "New York");
+      rentcastUrl.searchParams.set("state", "NY");
+      rentcastUrl.searchParams.set("limit", "20");
+      if (bedroomsParam !== "") rentcastUrl.searchParams.set("bedrooms", String(bedroomsParam));
 
       try {
-        const res = await fetch(url.toString(), {
+        const res = await fetch(rentcastUrl.toString(), {
           headers: { "X-Api-Key": apiKey },
         });
         if (!res.ok) {
@@ -243,103 +264,102 @@ export async function GET(request) {
         errors.push({ userId, error: String(e?.message ?? e) });
         continue;
       }
-    }
 
-    const normalizedListings = listings.map((l) => {
-      const zip = l?.zipCode ?? l?.zip ?? l?.address?.zipCode ?? (l?.address && typeof l.address === "object" ? l.address.zipCode : "") ?? "";
-      const neighborhood = getNeighborhoodFromZip(zip);
-      return { ...mapListing(l, neighborhood), raw: l, zip };
-    }).filter((l) => l.street != null || l.price != null);
+      const normalizedListings = listings.map((l) => {
+        const zip = l?.zipCode ?? l?.zip ?? l?.address?.zipCode ?? (l?.address && typeof l.address === "object" ? l.address.zipCode : "") ?? "";
+        const neighborhood = getNeighborhoodFromZip(zip);
+        return { ...mapListing(l, neighborhood), raw: l, zip };
+      }).filter((l) => l.street != null || l.price != null);
 
-    const byBudget = budgetMax > 0
-      ? normalizedListings.filter((l) => l.price != null && l.price <= budgetMax)
-      : normalizedListings;
-    const budgetFilteredOut = normalizedListings.length - byBudget.length;
-    if (budgetFilteredOut > 0) {
-      console.log(`[digest]   Price filter: ${byBudget.length} passed (<= ${budgetMax}), ${budgetFilteredOut} failed`);
-    }
-
-    const byNeighborhood = targetNeighborhoods.length > 0
-      ? byBudget.filter((l) => l.neighborhood && targetNeighborhoods.includes(l.neighborhood))
-      : byBudget;
-    passedPriceFilter += byBudget.length;
-    passedNeighborhoodFilter += byNeighborhood.length;
-    if (targetNeighborhoods.length > 0) {
-      const neighborhoodFilteredOut = byBudget.length - byNeighborhood.length;
-      console.log(`[digest]   Neighborhood filter (targets: ${targetNeighborhoods.join(", ")}): ${byNeighborhood.length} passed, ${neighborhoodFilteredOut} failed`);
-    }
-
-    normalizedListings.forEach((l, idx) => {
-      const priceOk = budgetMax <= 0 || (l.price != null && l.price <= budgetMax);
-      const neighborhoodOk = targetNeighborhoods.length === 0 || (l.neighborhood && targetNeighborhoods.includes(l.neighborhood));
-      const addr = l.street || "(no address)";
-      if (!priceOk) console.log(`[digest]   listing ${idx + 1} [${addr}]: price filter FAIL (price=${l.price}, budget_max=${budgetMax})`);
-      else if (!neighborhoodOk) console.log(`[digest]   listing ${idx + 1} [${addr}]: neighborhood filter FAIL (neighborhood=${l.neighborhood || "unknown"}, targets=${targetNeighborhoods.join(", ") || "any"})`);
-    });
-
-    // Only check this user's apartments — do not check other users' apartments.
-    const existingAddresses = new Set();
-    const { data: existingApts } = await supabaseAdmin
-      .from("apartments")
-      .select("street")
-      .eq("user_id", userId);
-    (existingApts ?? []).forEach((a) => {
-      existingAddresses.add(normalizeAddress(a.street || ""));
-    });
-
-    const boardAddressList = (existingApts ?? []).map((a) => a.street || "(empty)");
-    console.log(`[digest]   User ${userId} board addresses (${boardAddressList.length} total, checking against):`, boardAddressList);
-
-    const { data: sentRows } = await supabaseAdmin
-      .from("digest_sent")
-      .select("listing_id, sent_at")
-      .eq("user_id", userId);
-    const sentIds = new Set((sentRows ?? []).map((r) => r.listing_id));
-    const sentByListingId = new Map((sentRows ?? []).map((r) => [r.listing_id, r]));
-    console.log(`[digest]   Dedup: ${existingAddresses.size} existing addresses on board, ${sentIds.size} already sent for this user`);
-
-    const toInsert = [];
-    let dedupSent = 0;
-    let dedupBoard = 0;
-    for (const item of byNeighborhood) {
-      const listingId = getListingId(item.raw ?? item);
-      const listingAddress = item.street || item.listing_id || "(no address)";
-
-      if (sentIds.has(listingId)) {
-        dedupSent += 1;
-        const matchingSent = sentByListingId.get(listingId);
-        console.log(`[digest]   --- Listing REJECTED by dedup (passed neighborhood filter) ---`);
-        console.log(`[digest]      1. listing address/id: ${listingAddress} (listing_id: ${listingId})`);
-        console.log(`[digest]      2. found in digest_sent: YES`, matchingSent ? { listing_id: matchingSent.listing_id, sent_at: matchingSent.sent_at } : "(record: " + JSON.stringify(matchingSent) + ")");
-        console.log(`[digest]      3. found on user's board: (not checked — skipped by digest_sent first)`);
-        console.log(`[digest]      4. skipped because: already in digest_sent`);
-        continue;
+      const byBudget = budgetMax > 0
+        ? normalizedListings.filter((l) => l.price != null && l.price <= budgetMax)
+        : normalizedListings;
+      const budgetFilteredOut = normalizedListings.length - byBudget.length;
+      if (budgetFilteredOut > 0) {
+        console.log(`[digest]   Price filter: ${byBudget.length} passed (<= ${budgetMax}), ${budgetFilteredOut} failed`);
       }
 
-      const addrNorm = normalizeAddress(item.street || "");
-      if (addrNorm && existingAddresses.has(addrNorm)) {
-        dedupBoard += 1;
-        const matchingBoardStreet = (existingApts ?? []).find((a) => normalizeAddress(a.street || "") === addrNorm)?.street ?? addrNorm;
-        console.log(`[digest]   --- Listing REJECTED by dedup (passed neighborhood filter) ---`);
-        console.log(`[digest]      1. listing address/id: ${listingAddress} (listing_id: ${listingId})`);
-        console.log(`[digest]      2. found in digest_sent: NO`);
-        console.log(`[digest]      3. found on user's board: YES (matching board address: "${matchingBoardStreet}")`);
-        console.log(`[digest]      4. skipped because: address already on board`);
-        continue;
+      const byNeighborhood = targetNeighborhoods.length > 0
+        ? byBudget.filter((l) => l.neighborhood && targetNeighborhoods.includes(l.neighborhood))
+        : byBudget;
+      passedPriceFilter += byBudget.length;
+      passedNeighborhoodFilter += byNeighborhood.length;
+      if (targetNeighborhoods.length > 0) {
+        const neighborhoodFilteredOut = byBudget.length - byNeighborhood.length;
+        console.log(`[digest]   Neighborhood filter (targets: ${targetNeighborhoods.join(", ")}): ${byNeighborhood.length} passed, ${neighborhoodFilteredOut} failed`);
       }
 
-      toInsert.push({
-        listing_id: listingId,
-        neighborhood: item.neighborhood || null,
-        street: item.street || null,
-        price: item.price,
-        beds: item.beds,
-        baths: item.baths,
+      normalizedListings.forEach((l, idx) => {
+        const priceOk = budgetMax <= 0 || (l.price != null && l.price <= budgetMax);
+        const neighborhoodOk = targetNeighborhoods.length === 0 || (l.neighborhood && targetNeighborhoods.includes(l.neighborhood));
+        const addr = l.street || "(no address)";
+        if (!priceOk) console.log(`[digest]   listing ${idx + 1} [${addr}]: price filter FAIL (price=${l.price}, budget_max=${budgetMax})`);
+        else if (!neighborhoodOk) console.log(`[digest]   listing ${idx + 1} [${addr}]: neighborhood filter FAIL (neighborhood=${l.neighborhood || "unknown"}, targets=${targetNeighborhoods.join(", ") || "any"})`);
       });
-    }
 
-    newMatches += toInsert.length;
-    console.log(`[digest]   New matches after all filters: ${toInsert.length} (skipped: ${dedupSent} already sent, ${dedupBoard} already on board)`);
+      // Only check this user's apartments — do not check other users' apartments.
+      const existingAddresses = new Set();
+      const { data: existingApts } = await supabaseAdmin
+        .from("apartments")
+        .select("street")
+        .eq("user_id", userId);
+      (existingApts ?? []).forEach((a) => {
+        existingAddresses.add(normalizeAddress(a.street || ""));
+      });
+
+      const boardAddressList = (existingApts ?? []).map((a) => a.street || "(empty)");
+      console.log(`[digest]   User ${userId} board addresses (${boardAddressList.length} total, checking against):`, boardAddressList);
+
+      const { data: sentRows } = await supabaseAdmin
+        .from("digest_sent")
+        .select("listing_id, sent_at")
+        .eq("user_id", userId);
+      const sentIds = new Set((sentRows ?? []).map((r) => r.listing_id));
+      const sentByListingId = new Map((sentRows ?? []).map((r) => [r.listing_id, r]));
+      console.log(`[digest]   Dedup: ${existingAddresses.size} existing addresses on board, ${sentIds.size} already sent for this user`);
+
+      let dedupSent = 0;
+      let dedupBoard = 0;
+      for (const item of byNeighborhood) {
+        const listingId = getListingId(item.raw ?? item);
+        const listingAddress = item.street || item.listing_id || "(no address)";
+
+        if (sentIds.has(listingId)) {
+          dedupSent += 1;
+          const matchingSent = sentByListingId.get(listingId);
+          console.log(`[digest]   --- Listing REJECTED by dedup (passed neighborhood filter) ---`);
+          console.log(`[digest]      1. listing address/id: ${listingAddress} (listing_id: ${listingId})`);
+          console.log(`[digest]      2. found in digest_sent: YES`, matchingSent ? { listing_id: matchingSent.listing_id, sent_at: matchingSent.sent_at } : "(record: " + JSON.stringify(matchingSent) + ")");
+          console.log(`[digest]      3. found on user's board: (not checked — skipped by digest_sent first)`);
+          console.log(`[digest]      4. skipped because: already in digest_sent`);
+          continue;
+        }
+
+        const addrNorm = normalizeAddress(item.street || "");
+        if (addrNorm && existingAddresses.has(addrNorm)) {
+          dedupBoard += 1;
+          const matchingBoardStreet = (existingApts ?? []).find((a) => normalizeAddress(a.street || "") === addrNorm)?.street ?? addrNorm;
+          console.log(`[digest]   --- Listing REJECTED by dedup (passed neighborhood filter) ---`);
+          console.log(`[digest]      1. listing address/id: ${listingAddress} (listing_id: ${listingId})`);
+          console.log(`[digest]      2. found in digest_sent: NO`);
+          console.log(`[digest]      3. found on user's board: YES (matching board address: "${matchingBoardStreet}")`);
+          console.log(`[digest]      4. skipped because: address already on board`);
+          continue;
+        }
+
+        toInsert.push({
+          listing_id: listingId,
+          neighborhood: item.neighborhood || null,
+          street: item.street || null,
+          price: item.price,
+          beds: item.beds,
+          baths: item.baths,
+        });
+      }
+
+      newMatches += toInsert.length;
+      console.log(`[digest]   New matches after all filters: ${toInsert.length} (skipped: ${dedupSent} already sent, ${dedupBoard} already on board)`);
+    }
 
     if (toInsert.length === 0) {
       console.log(`[digest]   No new matches for user ${userId}, skipping email`);
@@ -347,29 +367,33 @@ export async function GET(request) {
       continue;
     }
 
-    for (const item of toInsert) {
-      const { error: insertErr } = await supabaseAdmin
-        .from("apartments")
-        .insert({
-          user_id: userId,
-          group_id: null,
-          status: "saved",
-          price: item.price,
-          neighborhood: item.neighborhood,
-          street: item.street,
-          beds: item.beds,
-          baths: item.baths,
-          listing_url: null,
-          notes: null,
-        });
-      if (insertErr) {
-        console.log(`[digest]   Apartment insert failed for ${item.street || item.listing_id}:`, insertErr.message);
-        errors.push({ userId, listing_id: item.listing_id, error: insertErr.message });
-        continue;
+    if (!mockMode) {
+      for (const item of toInsert) {
+        const { error: insertErr } = await supabaseAdmin
+          .from("apartments")
+          .insert({
+            user_id: userId,
+            group_id: null,
+            status: "saved",
+            price: item.price,
+            neighborhood: item.neighborhood,
+            street: item.street,
+            beds: item.beds,
+            baths: item.baths,
+            listing_url: null,
+            notes: null,
+          });
+        if (insertErr) {
+          console.log(`[digest]   Apartment insert failed for ${item.street || item.listing_id}:`, insertErr.message);
+          errors.push({ userId, listing_id: item.listing_id, error: insertErr.message });
+          continue;
+        }
+        await supabaseAdmin
+          .from("digest_sent")
+          .insert({ user_id: userId, listing_id: item.listing_id });
       }
-      await supabaseAdmin
-        .from("digest_sent")
-        .insert({ user_id: userId, listing_id: item.listing_id });
+    } else {
+      console.log(`[digest]   Mock mode: skipping apartment insert and digest_sent (email only)`);
     }
 
     const subject = `${toInsert.length} new apartment${toInsert.length !== 1 ? "s" : ""} match your search — LaunchNYC`;
