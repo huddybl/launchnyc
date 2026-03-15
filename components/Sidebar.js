@@ -103,21 +103,22 @@ export default function Sidebar({ isOpen = false, onClose = () => {}, isMobile =
   const onNavClick = isMobile ? onClose : undefined;
   const content = sidebarContent(pathname, navLinks, isGuest, handleSignOut, onNavClick);
 
-  /* Mobile: overlay backdrop + sliding panel (fixed, not in flow) */
+  /* Mobile: dark overlay + sliding sidebar; above page content and mobile header */
   if (isMobile) {
     return (
       <>
         <div
           role="presentation"
-          className="fixed inset-0 z-40 bg-black/50 transition-opacity duration-200 md:hidden"
+          className="fixed inset-0 z-[100] bg-black/50 transition-opacity duration-200 md:hidden"
           style={{ opacity: isOpen ? 1 : 0, pointerEvents: isOpen ? "auto" : "none" }}
           onClick={onClose}
           aria-hidden
         />
         <aside
-          className="fixed left-0 top-0 bottom-0 z-50 flex w-56 flex-col justify-between bg-[#001f3f] shadow-xl transition-transform duration-300 ease-out md:hidden"
+          className="fixed left-0 top-0 bottom-0 z-[110] flex w-64 flex-col justify-between bg-[#001f3f] shadow-xl transition-transform duration-300 ease-out md:hidden"
           style={{ transform: isOpen ? "translateX(0)" : "translateX(-100%)" }}
           aria-hidden={!isOpen}
+          aria-label="Main navigation"
         >
           {content}
         </aside>

@@ -54,15 +54,31 @@ export default function AuthGuard({ children }) {
       return;
     }
     const allowed = !!session || isGuest;
-    // Not logged in and no guest flag: only /landing, /login, and /join/* are allowed.
+
+    // Root URL (/) redirects by auth state
+    if (pathname === "/") {
+      if (session) {
+        router.replace("/search-hq");
+        return;
+      }
+      if (isGuest) {
+        router.replace("/board");
+        return;
+      }
+      router.replace("/landing");
+      return;
+    }
+
+    // Not logged in and no guest: only /landing, /login, and /join/* are allowed.
     if (!allowed) {
       if (pathname !== "/landing" && pathname !== "/login" && !pathname.startsWith("/join/")) {
         router.replace("/landing");
         return;
       }
     }
+    // Logged-in user on landing or login → send to search-hq
     if (session && (pathname === "/login" || pathname === "/landing")) {
-      router.replace("/timeline");
+      router.replace("/search-hq");
       return;
     }
   }, [loading, session, isGuest, pathname, router]);

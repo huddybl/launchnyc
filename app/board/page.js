@@ -138,7 +138,6 @@ export default function BoardPage() {
   const [userGroup, setUserGroup] = useState(null);
   const [pendingInvite, setPendingInvite] = useState(null);
   const [inviteActionLoading, setInviteActionLoading] = useState(false);
-
   const fetchUserGroup = useCallback(async () => {
     if (!user?.id) {
       setUserGroup(null);
@@ -828,38 +827,52 @@ export default function BoardPage() {
           </div>
         </div>
         <div className="topbar-right">
-          <div className="board-mode-pills" role="tablist" aria-label="Board mode">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={boardMode === "personal"}
-              className={`board-mode-pill ${boardMode === "personal" ? "active" : ""}`}
-              onClick={() => {
-                if (boardMode !== "personal") {
-                  setApartments([]);
-                  setBoardMode("personal");
-                }
-              }}
-            >
-              My Search
-            </button>
+          <select
+            className="board-context-select"
+            value={boardMode === "personal" ? "personal" : (userGroup?.id ?? "personal")}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "personal") {
+                setApartments([]);
+                setBoardMode("personal");
+              } else if (userGroup?.id && v === userGroup.id) {
+                setApartments([]);
+                setBoardMode("group");
+              }
+            }}
+            aria-label="Board context"
+          >
+            <option value="personal">My Search</option>
             {userGroup?.id && (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={boardMode === "group"}
-                className={`board-mode-pill ${boardMode === "group" ? "active" : ""}`}
-                onClick={() => {
-                  if (boardMode !== "group") {
-                    setApartments([]);
-                    setBoardMode("group");
-                  }
-                }}
-              >
-                Group: {userGroup.name || "Unnamed"}
-              </button>
+              <option value={userGroup.id}>{userGroup.name || "Unnamed group"}</option>
             )}
-          </div>
+          </select>
+          <span className="topbar-weeks-desktop">
+            {moveInDate != null ? (
+              (() => {
+                const weeks = weeksToMoveIn(moveInDate);
+                const label =
+                  weeks < 0 ? "Move-in passed" : `${weeks} week${weeks !== 1 ? "s" : ""} to move-in`;
+                return <div className="weeks-pill">{label}</div>;
+              })()
+            ) : (
+              <Link href="/account" className="weeks-pill weeks-pill-link">
+                Set move-in date
+              </Link>
+            )}
+          </span>
+          <button
+            type="button"
+            className="btn-outline"
+            onClick={guard(openAddForm)}
+          >
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M8 3v10M3 8h10" />
+            </svg>
+            Add Apartment
+          </button>
+        </div>
+        <div className="topbar-mobile-second-row">
           {moveInDate != null ? (
             (() => {
               const weeks = weeksToMoveIn(moveInDate);
@@ -872,16 +885,6 @@ export default function BoardPage() {
               Set move-in date
             </Link>
           )}
-          <button
-            type="button"
-            className="btn-outline"
-            onClick={guard(openAddForm)}
-          >
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M8 3v10M3 8h10" />
-            </svg>
-            Add Apartment
-          </button>
         </div>
       </div>
 
