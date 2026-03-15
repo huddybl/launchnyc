@@ -243,56 +243,42 @@ export async function GET(request) {
       else if (!neighborhoodOk) console.log(`[digest]   listing ${idx + 1} [${addr}]: neighborhood filter FAIL (neighborhood=${l.neighborhood || "unknown"}, targets=${targetNeighborhoods.join(", ") || "any"})`);
     });
 
-    // Only check this user's apartments — do not check other users' apartments.
+    // ---------- DEDUP TEMPORARILY DISABLED FOR TESTING: every listing that passes price/neighborhood goes through ----------
+    // // Only check this user's apartments — do not check other users' apartments.
+    // const existingAddresses = new Set();
+    // const { data: existingApts } = await supabaseAdmin
+    //   .from("apartments")
+    //   .select("street")
+    //   .eq("user_id", userId);
+    // (existingApts ?? []).forEach((a) => {
+    //   existingAddresses.add(normalizeAddress(a.street || ""));
+    // });
+    // const boardAddressList = (existingApts ?? []).map((a) => a.street || "(empty)");
+    // console.log(`[digest]   User ${userId} board addresses (${boardAddressList.length} total, checking against):`, boardAddressList);
+    // const { data: sentRows } = await supabaseAdmin
+    //   .from("digest_sent")
+    //   .select("listing_id, sent_at")
+    //   .eq("user_id", userId);
+    // const sentIds = new Set((sentRows ?? []).map((r) => r.listing_id));
+    // const sentByListingId = new Map((sentRows ?? []).map((r) => [r.listing_id, r]));
+    // console.log(`[digest]   Dedup: ${existingAddresses.size} existing addresses on board, ${sentIds.size} already sent for this user`);
     const existingAddresses = new Set();
-    const { data: existingApts } = await supabaseAdmin
-      .from("apartments")
-      .select("street")
-      .eq("user_id", userId);
-    (existingApts ?? []).forEach((a) => {
-      existingAddresses.add(normalizeAddress(a.street || ""));
-    });
-
-    const boardAddressList = (existingApts ?? []).map((a) => a.street || "(empty)");
-    console.log(`[digest]   User ${userId} board addresses (${boardAddressList.length} total, checking against):`, boardAddressList);
-
-    const { data: sentRows } = await supabaseAdmin
-      .from("digest_sent")
-      .select("listing_id, sent_at")
-      .eq("user_id", userId);
-    const sentIds = new Set((sentRows ?? []).map((r) => r.listing_id));
-    const sentByListingId = new Map((sentRows ?? []).map((r) => [r.listing_id, r]));
-    console.log(`[digest]   Dedup: ${existingAddresses.size} existing addresses on board, ${sentIds.size} already sent for this user`);
+    const sentIds = new Set();
 
     const toInsert = [];
     let dedupSent = 0;
     let dedupBoard = 0;
     for (const item of byNeighborhood) {
       const listingId = getListingId(item.raw ?? item);
-      const listingAddress = item.street || item.listing_id || "(no address)";
-
-      if (sentIds.has(listingId)) {
-        dedupSent += 1;
-        const matchingSent = sentByListingId.get(listingId);
-        console.log(`[digest]   --- Listing REJECTED by dedup (passed neighborhood filter) ---`);
-        console.log(`[digest]      1. listing address/id: ${listingAddress} (listing_id: ${listingId})`);
-        console.log(`[digest]      2. found in digest_sent: YES`, matchingSent ? { listing_id: matchingSent.listing_id, sent_at: matchingSent.sent_at } : "(record: " + JSON.stringify(matchingSent) + ")");
-        console.log(`[digest]      3. found on user's board: (not checked — skipped by digest_sent first)`);
-        console.log(`[digest]      4. skipped because: already in digest_sent`);
-        continue;
-      }
-
-      const addrNorm = normalizeAddress(item.street || "");
-      if (addrNorm && existingAddresses.has(addrNorm)) {
-        dedupBoard += 1;
-        const matchingBoardStreet = (existingApts ?? []).find((a) => normalizeAddress(a.street || "") === addrNorm)?.street ?? addrNorm;
-        console.log(`[digest]   --- Listing REJECTED by dedup (passed neighborhood filter) ---`);
-        console.log(`[digest]      1. listing address/id: ${listingAddress} (listing_id: ${listingId})`);
-        console.log(`[digest]      2. found in digest_sent: NO`);
-        console.log(`[digest]      3. found on user's board: YES (matching board address: "${matchingBoardStreet}")`);
-        console.log(`[digest]      4. skipped because: address already on board`);
-        continue;
-      }
+      // if (sentIds.has(listingId)) {
+      //   dedupSent += 1;
+      //   ... continue;
+      // }
+      // const addrNorm = normalizeAddress(item.street || "");
+      // if (addrNorm && existingAddresses.has(addrNorm)) {
+      //   dedupBoard += 1;
+      //   ... continue;
+      // }
 
       toInsert.push({
         listing_id: listingId,
