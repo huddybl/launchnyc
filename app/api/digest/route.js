@@ -74,6 +74,21 @@ const ZIP_TO_NEIGHBORHOOD = {
   "11106": "Astoria",
 };
 
+const MOCK_LISTING = [
+  {
+    id: "mock-listing-1",
+    formattedAddress: "123 Bedford Ave, Apt 2B, Brooklyn, NY 11211",
+    addressLine1: "123 Bedford Ave",
+    addressLine2: "Apt 2B",
+    zipCode: "11211",
+    bedrooms: 2,
+    bathrooms: 1,
+    price: 3200,
+    status: "Active",
+    listedDate: "2026-03-15T00:00:00.000Z",
+  },
+];
+
 function getNeighborhoodFromZip(zip) {
   if (!zip) return null;
   const normalized = String(zip).trim().slice(0, 5);
@@ -111,15 +126,21 @@ function mapListing(listing, neighborhood) {
   };
 }
 
+// WARNING: Each run costs 1 RentCast API call per eligible user. Do not run repeatedly in production testing.
+
 export async function GET(request) {
   const cronSecret = request.headers.get("X-Cron-Secret");
   if (cronSecret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const mockMode = process.env.DIGEST_MOCK === "true";
   const apiKey = process.env.RENTCAST_API_KEY;
-  if (!apiKey) {
+  if (!mockMode && !apiKey) {
     return NextResponse.json({ error: "RENTCAST_API_KEY not configured" }, { status: 500 });
+  }
+  if (mockMode) {
+    console.log("[digest] DIGEST_MOCK=true: using hardcoded mock listing, skipping RentCast API");
   }
 
   const { data: profiles } = await supabaseAdmin
@@ -142,12 +163,19 @@ export async function GET(request) {
     });
   }
 
-  console.log("[digest] Eligible users:", profiles.length);
-  profiles.forEach((p, i) => {
+  const url = new URL(request.url);
+  const testMode = url.searchParams.get("test") === "true";
+  const profilesToProcess = testMode ? profiles.slice(0, 1) : profiles;
+  if (testMode) {
+    console.log("[digest] TEST MODE: only processing first 1 eligible user (of", profiles.length, "total)");
+  }
+
+  console.log("[digest] Eligible users:", profilesToProcess.length, testMode ? `(test mode: 1 of ${profiles.length})` : "");
+  profilesToProcess.forEach((p, i) => {
     console.log(`[digest]   user ${i + 1}: user_id=${p.user_id}, budget_max=${p.budget_max}, bedrooms=${p.bedrooms ?? "null"}, neighborhoods=${JSON.stringify(Array.isArray(p.neighborhoods) ? p.neighborhoods : p.neighborhoods)}`);
   });
 
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "LaunchNYC <onboarding@resend.dev>";
+  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "LaunchNYC <hello@launchnyc.app>";
   let processed = 0;
   const errors = [];
   let rentcastResults = 0;
@@ -156,7 +184,7 @@ export async function GET(request) {
   let newMatches = 0;
   let emailed = 0;
 
-  for (const profile of profiles) {
+  for (const profile of profilesToProcess) {
     const userId = profile.user_id;
     const budgetMax = Number(profile.budget_max);
     const bedrooms = profile.bedrooms != null ? Number(profile.bedrooms) : null;
@@ -183,32 +211,38 @@ export async function GET(request) {
       continue;
     }
 
-    const bedroomsParam = bedrooms != null ? Math.min(Math.max(0, Math.floor(bedrooms)), 5) : "";
-    const url = new URL("https://api.rentcast.io/v1/listings/rental/long-term");
-    url.searchParams.set("city", "New York");
-    url.searchParams.set("state", "NY");
-    url.searchParams.set("limit", "20");
-    if (bedroomsParam !== "") url.searchParams.set("bedrooms", String(bedroomsParam));
-
     let listings = [];
-    try {
-      const res = await fetch(url.toString(), {
-        headers: { "X-Api-Key": apiKey },
-      });
-      if (!res.ok) {
-        console.log(`[digest]   RentCast failed for ${userId}: status=${res.status}`);
-        errors.push({ userId, error: `RentCast ${res.status}` });
+    if (mockMode) {
+      listings = [...MOCK_LISTING];
+      rentcastResults += listings.length;
+      console.log(`[digest]   Mock mode: using ${listings.length} hardcoded listing(s) for user ${userId}`);
+    } else {
+      const bedroomsParam = bedrooms != null ? Math.min(Math.max(0, Math.floor(bedrooms)), 5) : "";
+      const url = new URL("https://api.rentcast.io/v1/listings/rental/long-term");
+      url.searchParams.set("city", "New York");
+      url.searchParams.set("state", "NY");
+      url.searchParams.set("limit", "20");
+      if (bedroomsParam !== "") url.searchParams.set("bedrooms", String(bedroomsParam));
+
+      try {
+        const res = await fetch(url.toString(), {
+          headers: { "X-Api-Key": apiKey },
+        });
+        if (!res.ok) {
+          console.log(`[digest]   RentCast failed for ${userId}: status=${res.status}`);
+          errors.push({ userId, error: `RentCast ${res.status}` });
+          continue;
+        }
+        const json = await res.json();
+        const raw = Array.isArray(json) ? json : json?.listings ?? json?.data ?? [];
+        listings = raw.filter((item) => item != null);
+        rentcastResults += listings.length;
+        console.log(`[digest]   RentCast returned ${listings.length} listings for user ${userId}`);
+      } catch (e) {
+        console.log(`[digest]   RentCast fetch error for ${userId}:`, e?.message ?? e);
+        errors.push({ userId, error: String(e?.message ?? e) });
         continue;
       }
-      const json = await res.json();
-      const raw = Array.isArray(json) ? json : json?.listings ?? json?.data ?? [];
-      listings = raw.filter((item) => item != null);
-      rentcastResults += listings.length;
-      console.log(`[digest]   RentCast returned ${listings.length} listings for user ${userId}`);
-    } catch (e) {
-      console.log(`[digest]   RentCast fetch error for ${userId}:`, e?.message ?? e);
-      errors.push({ userId, error: String(e?.message ?? e) });
-      continue;
     }
 
     const normalizedListings = listings.map((l) => {
@@ -243,42 +277,56 @@ export async function GET(request) {
       else if (!neighborhoodOk) console.log(`[digest]   listing ${idx + 1} [${addr}]: neighborhood filter FAIL (neighborhood=${l.neighborhood || "unknown"}, targets=${targetNeighborhoods.join(", ") || "any"})`);
     });
 
-    // ---------- DEDUP TEMPORARILY DISABLED FOR TESTING: every listing that passes price/neighborhood goes through ----------
-    // // Only check this user's apartments — do not check other users' apartments.
-    // const existingAddresses = new Set();
-    // const { data: existingApts } = await supabaseAdmin
-    //   .from("apartments")
-    //   .select("street")
-    //   .eq("user_id", userId);
-    // (existingApts ?? []).forEach((a) => {
-    //   existingAddresses.add(normalizeAddress(a.street || ""));
-    // });
-    // const boardAddressList = (existingApts ?? []).map((a) => a.street || "(empty)");
-    // console.log(`[digest]   User ${userId} board addresses (${boardAddressList.length} total, checking against):`, boardAddressList);
-    // const { data: sentRows } = await supabaseAdmin
-    //   .from("digest_sent")
-    //   .select("listing_id, sent_at")
-    //   .eq("user_id", userId);
-    // const sentIds = new Set((sentRows ?? []).map((r) => r.listing_id));
-    // const sentByListingId = new Map((sentRows ?? []).map((r) => [r.listing_id, r]));
-    // console.log(`[digest]   Dedup: ${existingAddresses.size} existing addresses on board, ${sentIds.size} already sent for this user`);
+    // Only check this user's apartments — do not check other users' apartments.
     const existingAddresses = new Set();
-    const sentIds = new Set();
+    const { data: existingApts } = await supabaseAdmin
+      .from("apartments")
+      .select("street")
+      .eq("user_id", userId);
+    (existingApts ?? []).forEach((a) => {
+      existingAddresses.add(normalizeAddress(a.street || ""));
+    });
+
+    const boardAddressList = (existingApts ?? []).map((a) => a.street || "(empty)");
+    console.log(`[digest]   User ${userId} board addresses (${boardAddressList.length} total, checking against):`, boardAddressList);
+
+    const { data: sentRows } = await supabaseAdmin
+      .from("digest_sent")
+      .select("listing_id, sent_at")
+      .eq("user_id", userId);
+    const sentIds = new Set((sentRows ?? []).map((r) => r.listing_id));
+    const sentByListingId = new Map((sentRows ?? []).map((r) => [r.listing_id, r]));
+    console.log(`[digest]   Dedup: ${existingAddresses.size} existing addresses on board, ${sentIds.size} already sent for this user`);
 
     const toInsert = [];
     let dedupSent = 0;
     let dedupBoard = 0;
     for (const item of byNeighborhood) {
       const listingId = getListingId(item.raw ?? item);
-      // if (sentIds.has(listingId)) {
-      //   dedupSent += 1;
-      //   ... continue;
-      // }
-      // const addrNorm = normalizeAddress(item.street || "");
-      // if (addrNorm && existingAddresses.has(addrNorm)) {
-      //   dedupBoard += 1;
-      //   ... continue;
-      // }
+      const listingAddress = item.street || item.listing_id || "(no address)";
+
+      if (sentIds.has(listingId)) {
+        dedupSent += 1;
+        const matchingSent = sentByListingId.get(listingId);
+        console.log(`[digest]   --- Listing REJECTED by dedup (passed neighborhood filter) ---`);
+        console.log(`[digest]      1. listing address/id: ${listingAddress} (listing_id: ${listingId})`);
+        console.log(`[digest]      2. found in digest_sent: YES`, matchingSent ? { listing_id: matchingSent.listing_id, sent_at: matchingSent.sent_at } : "(record: " + JSON.stringify(matchingSent) + ")");
+        console.log(`[digest]      3. found on user's board: (not checked — skipped by digest_sent first)`);
+        console.log(`[digest]      4. skipped because: already in digest_sent`);
+        continue;
+      }
+
+      const addrNorm = normalizeAddress(item.street || "");
+      if (addrNorm && existingAddresses.has(addrNorm)) {
+        dedupBoard += 1;
+        const matchingBoardStreet = (existingApts ?? []).find((a) => normalizeAddress(a.street || "") === addrNorm)?.street ?? addrNorm;
+        console.log(`[digest]   --- Listing REJECTED by dedup (passed neighborhood filter) ---`);
+        console.log(`[digest]      1. listing address/id: ${listingAddress} (listing_id: ${listingId})`);
+        console.log(`[digest]      2. found in digest_sent: NO`);
+        console.log(`[digest]      3. found on user's board: YES (matching board address: "${matchingBoardStreet}")`);
+        console.log(`[digest]      4. skipped because: address already on board`);
+        continue;
+      }
 
       toInsert.push({
         listing_id: listingId,
@@ -373,6 +421,7 @@ export async function GET(request) {
   return NextResponse.json({
     processed,
     eligible: profiles.length,
+    ...(testMode && { test_mode: true, processed_limit: 1 }),
     rentcast_results: rentcastResults,
     passed_price_filter: passedPriceFilter,
     passed_neighborhood_filter: passedNeighborhoodFilter,
