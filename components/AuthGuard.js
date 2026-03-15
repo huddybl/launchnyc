@@ -58,7 +58,7 @@ export default function AuthGuard({ children }) {
     // Root URL (/) redirects by auth state
     if (pathname === "/") {
       if (session) {
-        router.replace("/search-hq");
+        router.replace("/timeline");
         return;
       }
       if (isGuest) {
@@ -76,9 +76,9 @@ export default function AuthGuard({ children }) {
         return;
       }
     }
-    // Logged-in user on landing or login → send to search-hq
+    // Logged-in user on landing or login → send to timeline (Search HQ)
     if (session && (pathname === "/login" || pathname === "/landing")) {
-      router.replace("/search-hq");
+      router.replace("/timeline");
       return;
     }
   }, [loading, session, isGuest, pathname, router]);
