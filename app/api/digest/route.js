@@ -243,12 +243,12 @@ export async function GET(request) {
       else if (!neighborhoodOk) console.log(`[digest]   listing ${idx + 1} [${addr}]: neighborhood filter FAIL (neighborhood=${l.neighborhood || "unknown"}, targets=${targetNeighborhoods.join(", ") || "any"})`);
     });
 
+    // Only check this user's apartments — do not check other users' apartments.
     const existingAddresses = new Set();
     const { data: existingApts } = await supabaseAdmin
       .from("apartments")
       .select("street")
-      .eq("user_id", userId)
-      .is("group_id", null);
+      .eq("user_id", userId);
     (existingApts ?? []).forEach((a) => {
       existingAddresses.add(normalizeAddress(a.street || ""));
     });
